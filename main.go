@@ -1,6 +1,8 @@
 package main
 
-import "github.com/notresponding2u/chroma-wrapper/wrapper"
+import (
+	"github.com/notresponding2u/chroma-wrapper/wrapper"
+)
 
 func main() {
 	w, err := wrapper.New(
@@ -14,9 +16,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer w.Close()
 	err = w.Static()
 	if err != nil {
 		panic(err)
 	}
-
+	//time.Sleep(10 * time.Second)
 }

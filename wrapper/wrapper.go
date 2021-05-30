@@ -35,6 +35,10 @@ type connectionResponse struct {
 	Uri       string `json:"uri"`
 }
 
+type SdkResponse struct {
+	Result int64 `json:"result"`
+}
+
 const DeviceKeyboard = "keyboard"
 
 //const DeviceMouse = "mouse"
@@ -72,7 +76,7 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-	go w.Heartbeat()
+	go w.heartbeat()
 	return w, nil
 }
 func (w *wrapper) openConnection(a app) error {
@@ -96,36 +100,71 @@ func (w *wrapper) openConnection(a app) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Session %q", w.session)
 	return nil
 }
-func (w *wrapper) Heartbeat() {
-	url := fmt.Sprintf("%s/heartbeat", w.session.Uri)
-	req, err := http.NewRequest(http.MethodPut, url, nil)
+
+func (w *wrapper) heartbeat() {
+	for {
+		url := fmt.Sprintf("%s/heartbeat", w.session.Uri)
+		req, err := http.NewRequest(http.MethodPut, url, nil)
+		if err != nil {
+			panic(err)
+		}
+		client := &http.Client{}
+		res, err := client.Do(req)
+		if err != nil {
+			panic(err)
+		}
+		defer res.Body.Close()
+		if res.StatusCode != 200 {
+			panic(errors.New(fmt.Sprintf("Status code %d", res.StatusCode)))
+		}
+		fmt.Println("Beep")
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (w *wrapper) Close() error {
+	req, err := http.NewRequest(http.MethodDelete, w.session.Uri, nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		panic(errors.New(fmt.Sprintf("Status code %d", res.StatusCode)))
+		return errors.New(fmt.Sprintf("Close status code: %d", res.StatusCode))
 	}
-	time.Sleep(5 * time.Second)
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var response SdkResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	if response.Result != 0 {
+		return errors.New(fmt.Sprintf("Error closing connection, response result: %d", response.Result))
+	}
+	return nil
 }
 
 func (w *wrapper) Static() error {
 	e := effect.Effect{
-		Effect: effect.Custom,
-		Param:  effect.Param{Color: 255},
+		Effect: effect.Static,
+		Param:  effect.Param{Color: 200},
 	}
 	payload, err := json.Marshal(e)
 	if err != nil {
 		return err
 	}
-	res, err := http.Post(w.url, w.applicationContent, bytes.NewBuffer(payload))
+	url := fmt.Sprintf("%s/keyboard", w.session.Uri)
+	res, err := http.Post(url, w.applicationContent, bytes.NewBuffer(payload))
 	if err != nil {
 		return err
 	}
@@ -137,13 +176,13 @@ func (w *wrapper) Static() error {
 	if err != nil {
 		return err
 	}
-	var response effect.EffectResponse
+	var response SdkResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return err
 	}
 	if response.Result != 0 {
-		return errors.New(fmt.Sprintf("Wront response result code: %d", response.Result))
+		return errors.New(fmt.Sprintf("Status code: %d", response.Result))
 	}
 	return nil
 }

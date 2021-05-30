@@ -8,10 +8,6 @@ type Effect struct {
 	Param  Param  `json:"param"`
 }
 
-type EffectResponse struct {
-	Result int64 `json:"result"`
-}
-
 type Param struct {
 	Color int64 `json:"color"`
 }
