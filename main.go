@@ -21,5 +21,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	err = w.DeleteEffects()
+	if err != nil {
+		panic(err)
+	}
 	//time.Sleep(10 * time.Second)
 }

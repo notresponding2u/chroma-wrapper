@@ -11,3 +11,10 @@ type Effect struct {
 type Param struct {
 	Color int64 `json:"color"`
 }
+
+type Identifier struct {
+	Id string `json:"id"`
+}
+type List struct {
+	Ids []string `json:"ids"`
+}

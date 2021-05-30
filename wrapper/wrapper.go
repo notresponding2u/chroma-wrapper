@@ -15,6 +15,7 @@ type wrapper struct {
 	url                string
 	applicationContent string
 	session            connectionResponse
+	List               effect.List
 }
 
 type author struct {
@@ -36,7 +37,12 @@ type connectionResponse struct {
 }
 
 type SdkResponse struct {
-	Result int64 `json:"result"`
+	Result int64  `json:"result"`
+	Id     string `json:"id"`
+}
+
+type SdkResults struct {
+	Results []SdkResponse
 }
 
 const DeviceKeyboard = "keyboard"
@@ -183,6 +189,74 @@ func (w *wrapper) Static() error {
 	}
 	if response.Result != 0 {
 		return errors.New(fmt.Sprintf("Status code: %d", response.Result))
+	}
+	err = w.setEffect(response)
+	return err
+}
+
+func (w *wrapper) setEffect(ef SdkResponse) error {
+	w.List.Ids = append(w.List.Ids, ef.Id)
+	fmt.Println(ef.Id)
+	e := effect.Identifier{Id: ef.Id}
+	url := fmt.Sprintf("%s/effect", w.session.Uri)
+	payload, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{}
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var response SdkResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	if response.Result != 0 {
+		return errors.New(fmt.Sprintf("Bad result code on effect apply: %d", response.Result))
+	}
+	return nil
+}
+
+func (w *wrapper) DeleteEffects() error {
+	url := fmt.Sprintf("%s/effect", w.session.Uri)
+	payload, err := json.Marshal(w.List)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{}
+	req, err := http.NewRequest(http.MethodDelete, url, bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var results SdkResults
+	err = json.Unmarshal(body, &results)
+	if err != nil {
+		return err
+	}
+	for _, sdkRes := range results.Results {
+		if sdkRes.Result != 0 {
+			return errors.New(fmt.Sprintf("Wrong result code on deleting effect: %d", sdkRes.Result))
+		}
 	}
 	return nil
 }
