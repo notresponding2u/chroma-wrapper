@@ -10,7 +10,7 @@ func main() {
 		"http://localhost:54235/razer/chromasdk",
 		"L",
 		"notresponding2u@gmail.com",
-		"Heat map new",
+		"Heat map new1",
 		"Heatmap to be",
 		[]string{wrapper.DeviceKeyboard},
 	)
@@ -24,6 +24,9 @@ func main() {
 		}
 	}()
 	//err = w.Static()
+
+	time.Sleep(2 * time.Second)
+
 	err = w.Custom()
 	if err != nil {
 		panic(err)

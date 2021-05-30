@@ -234,8 +234,7 @@ func getKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
 	var grid effect.KeyboardGrid
 	for i, _ := range grid.Param {
 		for y, _ := range grid.Param[i] {
-			grid.Param[i][y] = 0xffffff
-			return grid.Param
+			grid.Param[i][y] = 0x160F00
 		}
 	}
 	return grid.Param
