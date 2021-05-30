@@ -96,23 +96,29 @@ func (w *wrapper) openConnection(a app) error {
 	if err != nil {
 		return err
 	}
+
 	res, err := http.Post(w.url, w.applicationContent, bytes.NewBuffer(payload))
 	if err != nil {
 		return err
 	}
+
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
 		return errors.New(fmt.Sprintf("Status code %d", res.StatusCode))
 	}
+
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return err
 	}
+
 	err = json.Unmarshal(body, &w.session)
 	if err != nil {
 		return err
 	}
+
 	fmt.Printf("Session %q", w.session)
+
 	w.Client = &http.Client{
 		Transport: &http.Transport{
 			MaxIdleConnsPerHost: 20,
@@ -125,18 +131,22 @@ func (w *wrapper) openConnection(a app) error {
 func (w *wrapper) heartbeat() {
 	for {
 		url := fmt.Sprintf("%s/heartbeat", w.session.Uri)
+
 		req, err := http.NewRequest(http.MethodPut, url, nil)
 		if err != nil {
 			panic(err)
 		}
+
 		res, err := w.Client.Do(req)
 		if err != nil {
 			panic(err)
 		}
+
 		defer res.Body.Close()
 		if res.StatusCode != 200 {
 			panic(errors.New(fmt.Sprintf("Status code %d", res.StatusCode)))
 		}
+
 		fmt.Println("Beep")
 		time.Sleep(time.Second)
 	}
@@ -170,32 +180,42 @@ func (w *wrapper) makeRequest(e interface{}, url string, method string) error {
 	if err != nil {
 		return err
 	}
+
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(payload))
 	if err != nil {
 		return err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
+
 	res, err := w.Client.Do(req)
 	if err != nil {
 		return err
 	}
+
 	defer res.Body.Close()
+
 	if res.StatusCode != 200 {
 		return errors.New(fmt.Sprintf("Error, httpcode: %d", res.StatusCode))
 	}
+
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return err
 	}
+
 	var response SdkResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return err
 	}
+
 	if response.Result != 0 {
 		return errors.New(fmt.Sprintf("Status code: %d", response.Result))
 	}
+
 	fmt.Printf("%d\n%s", response.Result, response.Id)
+
 	return err
 
 }
@@ -203,8 +223,10 @@ func (w *wrapper) makeRequest(e interface{}, url string, method string) error {
 func (w *wrapper) setEffect(ef SdkResponse) error {
 	//w.List.Ids = append(w.List.Ids, ef.Id)
 	fmt.Println(ef.Id)
-	e := effect.Identifier{Id: ef.Id}
+
+	e := &effect.Identifier{Id: ef.Id}
 	url := fmt.Sprintf("%s/effect", w.session.Uri)
+
 	return w.makeRequest(e, url, http.MethodPost)
 }
 
@@ -212,14 +234,15 @@ func getKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
 	var grid effect.KeyboardGrid
 	for i, _ := range grid.Param {
 		for y, _ := range grid.Param[i] {
-			grid.Param[i][y] = 16711680
+			grid.Param[i][y] = 0xffffff
+			return grid.Param
 		}
 	}
 	return grid.Param
 }
 
 func (w *wrapper) Custom() error {
-	e := effect.KeyboardGrid{
+	e := &effect.KeyboardGrid{
 		Effect: effect.Custom,
 		Param:  getKeyboardStruct(),
 	}
