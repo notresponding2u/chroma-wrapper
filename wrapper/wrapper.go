@@ -16,6 +16,7 @@ type wrapper struct {
 	applicationContent string
 	session            connectionResponse
 	List               effect.List
+	Client             *http.Client
 }
 
 type author struct {
@@ -32,7 +33,7 @@ type app struct {
 }
 
 type connectionResponse struct {
-	SessionId int64  `json:"sessionid"`
+	SessionId rune   `json:"sessionid"`
 	Uri       string `json:"uri"`
 }
 
@@ -45,7 +46,11 @@ type SdkResults struct {
 	Results []SdkResponse
 }
 
-const DeviceKeyboard = "keyboard"
+const (
+	DeviceKeyboard     = "keyboard"
+	KeyboardMaxRows    = 6
+	KeyboardMaxColumns = 22
+)
 
 //const DeviceMouse = "mouse"
 //const DeviceHeadset = "headset"
@@ -85,6 +90,7 @@ func New(
 	go w.heartbeat()
 	return w, nil
 }
+
 func (w *wrapper) openConnection(a app) error {
 	payload, err := json.Marshal(a)
 	if err != nil {
@@ -107,6 +113,12 @@ func (w *wrapper) openConnection(a app) error {
 		return err
 	}
 	fmt.Printf("Session %q", w.session)
+	w.Client = &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: 20,
+		},
+		Timeout: time.Duration(5) * time.Second,
+	}
 	return nil
 }
 
@@ -117,8 +129,7 @@ func (w *wrapper) heartbeat() {
 		if err != nil {
 			panic(err)
 		}
-		client := &http.Client{}
-		res, err := client.Do(req)
+		res, err := w.Client.Do(req)
 		if err != nil {
 			panic(err)
 		}
@@ -127,56 +138,50 @@ func (w *wrapper) heartbeat() {
 			panic(errors.New(fmt.Sprintf("Status code %d", res.StatusCode)))
 		}
 		fmt.Println("Beep")
-		time.Sleep(5 * time.Second)
+		time.Sleep(time.Second)
 	}
+}
+
+func (w *wrapper) deleteEffects() error {
+	url := fmt.Sprintf("%s/effect", w.session.Uri)
+	return w.makeRequest(w.List, url, http.MethodDelete)
 }
 
 func (w *wrapper) Close() error {
-	req, err := http.NewRequest(http.MethodDelete, w.session.Uri, nil)
-	if err != nil {
-		return err
-	}
-	client := &http.Client{}
-	res, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("Close status code: %d", res.StatusCode))
-	}
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	var response SdkResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return err
-	}
-	if response.Result != 0 {
-		return errors.New(fmt.Sprintf("Error closing connection, response result: %d", response.Result))
-	}
-	return nil
+	return w.makeRequest(nil, w.session.Uri, http.MethodDelete)
+	//err = w.deleteEffects()
 }
 
 func (w *wrapper) Static() error {
-	e := effect.Effect{
+	e := &effect.Effect{
 		Effect: effect.Static,
 		Param:  effect.Param{Color: 200},
 	}
-	payload, err := json.Marshal(e)
+	return w.makeKeyboardRequest(e)
+}
+
+func (w *wrapper) makeKeyboardRequest(e interface{}) error {
+	url := fmt.Sprintf("%s/keyboard", w.session.Uri)
+	return w.makeRequest(e, url, http.MethodPut)
+}
+
+func (w *wrapper) makeRequest(e interface{}, url string, method string) error {
+	payload, err := json.Marshal(&e)
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("%s/keyboard", w.session.Uri)
-	res, err := http.Post(url, w.applicationContent, bytes.NewBuffer(payload))
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := w.Client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("Error effect change, code: %d", res.StatusCode))
+		return errors.New(fmt.Sprintf("Error, httpcode: %d", res.StatusCode))
 	}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -190,73 +195,33 @@ func (w *wrapper) Static() error {
 	if response.Result != 0 {
 		return errors.New(fmt.Sprintf("Status code: %d", response.Result))
 	}
-	err = w.setEffect(response)
+	fmt.Printf("%d\n%s", response.Result, response.Id)
 	return err
+
 }
 
 func (w *wrapper) setEffect(ef SdkResponse) error {
-	w.List.Ids = append(w.List.Ids, ef.Id)
+	//w.List.Ids = append(w.List.Ids, ef.Id)
 	fmt.Println(ef.Id)
 	e := effect.Identifier{Id: ef.Id}
 	url := fmt.Sprintf("%s/effect", w.session.Uri)
-	payload, err := json.Marshal(e)
-	if err != nil {
-		return err
-	}
-	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(payload))
-	if err != nil {
-		return err
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	var response SdkResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return err
-	}
-	if response.Result != 0 {
-		return errors.New(fmt.Sprintf("Bad result code on effect apply: %d", response.Result))
-	}
-	return nil
+	return w.makeRequest(e, url, http.MethodPost)
 }
 
-func (w *wrapper) DeleteEffects() error {
-	url := fmt.Sprintf("%s/effect", w.session.Uri)
-	payload, err := json.Marshal(w.List)
-	if err != nil {
-		return err
-	}
-	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodDelete, url, bytes.NewBuffer(payload))
-	if err != nil {
-		return err
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	var results SdkResults
-	err = json.Unmarshal(body, &results)
-	if err != nil {
-		return err
-	}
-	for _, sdkRes := range results.Results {
-		if sdkRes.Result != 0 {
-			return errors.New(fmt.Sprintf("Wrong result code on deleting effect: %d", sdkRes.Result))
+func getKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
+	var grid effect.KeyboardGrid
+	for i, _ := range grid.Param {
+		for y, _ := range grid.Param[i] {
+			grid.Param[i][y] = 16711680
 		}
 	}
-	return nil
+	return grid.Param
+}
+
+func (w *wrapper) Custom() error {
+	e := effect.KeyboardGrid{
+		Effect: effect.Custom,
+		Param:  getKeyboardStruct(),
+	}
+	return w.makeKeyboardRequest(e)
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
+	"time"
 )
 
 func main() {
@@ -9,21 +10,23 @@ func main() {
 		"http://localhost:54235/razer/chromasdk",
 		"L",
 		"notresponding2u@gmail.com",
-		"Heat map",
+		"Heat map new",
 		"Heatmap to be",
 		[]string{wrapper.DeviceKeyboard},
 	)
 	if err != nil {
 		panic(err)
 	}
-	defer w.Close()
-	err = w.Static()
+	defer func() {
+		err = w.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+	//err = w.Static()
+	err = w.Custom()
 	if err != nil {
 		panic(err)
 	}
-	err = w.DeleteEffects()
-	if err != nil {
-		panic(err)
-	}
-	//time.Sleep(10 * time.Second)
+	time.Sleep(10 * time.Second)
 }
