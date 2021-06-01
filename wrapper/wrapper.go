@@ -167,10 +167,10 @@ func (w *wrapper) Static() error {
 		Effect: effect.Static,
 		Param:  effect.Param{Color: 200},
 	}
-	return w.makeKeyboardRequest(e)
+	return w.MakeKeyboardRequest(e)
 }
 
-func (w *wrapper) makeKeyboardRequest(e interface{}) error {
+func (w *wrapper) MakeKeyboardRequest(e interface{}) error {
 	url := fmt.Sprintf("%s/keyboard", w.session.Uri)
 	return w.makeRequest(e, url, http.MethodPut)
 }
@@ -230,21 +230,28 @@ func (w *wrapper) setEffect(ef SdkResponse) error {
 	return w.makeRequest(e, url, http.MethodPost)
 }
 
-func getKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
+func GetKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
 	var grid effect.KeyboardGrid
 	for i, _ := range grid.Param {
 		for y, _ := range grid.Param[i] {
 			grid.Param[i][y] = 0xFF0000
 		}
 	}
-
 	return grid.Param
 }
 
 func (w *wrapper) Custom() error {
 	e := &effect.KeyboardGrid{
 		Effect: effect.Custom,
-		Param:  getKeyboardStruct(),
+		Param:  GetKeyboardStruct(),
 	}
-	return w.makeKeyboardRequest(e)
+	return w.MakeKeyboardRequest(e)
+}
+
+func BasicGrid() *effect.KeyboardGrid {
+	e := &effect.KeyboardGrid{
+		Effect: effect.Custom,
+		Param:  GetKeyboardStruct(),
+	}
+	return e
 }

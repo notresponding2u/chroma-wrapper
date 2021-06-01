@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"github.com/notresponding2u/chroma-wrapper/heatmap"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
+	hook "github.com/robotn/gohook"
 	"time"
 )
 
@@ -34,22 +37,23 @@ func main() {
 
 	time.Sleep(5 * time.Second)
 
-	//
-	//fmt.Println("hook add...")
-	//s := hook.Start()
-	//defer hook.End()
-	//
-	//ct := false
-	//for {
-	//	i := <-s
-	//
-	//	if i.Kind == hook.KeyHold && i.Rawcode == 59 {
-	//		ct = true
-	//	}
-	//
-	//	if ct && i.Rawcode == 12 {
-	//		break
-	//	}
-	//}
+	h := heatmap.NewMap()
+	g := wrapper.BasicGrid()
+
+	fmt.Println("hook start...")
+	evChan := hook.Start()
+	defer hook.End()
+
+	for ev := range evChan {
+		//fmt.Println("hook: ", ev)
+		if k, check := h[ev.Rawcode]; check {
+			heatmap.HeatUp(k, g)
+			err = w.MakeKeyboardRequest(&g)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Printf("updated %d", &g.Param[k.X][k.Y])
+		}
+	}
 
 }
