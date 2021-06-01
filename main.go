@@ -31,5 +31,25 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	time.Sleep(5 * time.Second)
+
+	//
+	//fmt.Println("hook add...")
+	//s := hook.Start()
+	//defer hook.End()
+	//
+	//ct := false
+	//for {
+	//	i := <-s
+	//
+	//	if i.Kind == hook.KeyHold && i.Rawcode == 59 {
+	//		ct = true
+	//	}
+	//
+	//	if ct && i.Rawcode == 12 {
+	//		break
+	//	}
+	//}
+
 }

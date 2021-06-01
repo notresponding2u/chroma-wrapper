@@ -232,11 +232,33 @@ func (w *wrapper) setEffect(ef SdkResponse) error {
 
 func getKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
 	var grid effect.KeyboardGrid
-	for i, _ := range grid.Param {
-		for y, _ := range grid.Param[i] {
-			grid.Param[i][y] = 0x160F00
-		}
-	}
+	//for i, _ := range grid.Param {
+	//	for y, _ := range grid.Param[i] {
+	//		grid.Param[i][y] = 0xFFFFFF
+	//	}
+	//}
+	grid.Param[5][7] = 0xFFFFFF
+	//grid.Param[5][18] =  0xFF0000
+	//grid.Param[5][19] =  0x00FF00
+	//grid.Param[5][20] =  0x0000FF
+
+	grid.Param[0][21] = 0xFF0000
+	grid.Param[1][21] = 0x00FF00
+	grid.Param[2][21] = 0x0000FF
+
+	//grid.Param[0][3] =  0xFFFFFF
+	//grid.Param[1][3] =  0xFFFFFF
+	//grid.Param[2][3] =  0xFFFFFF
+	//grid.Param[3][3] =  0xFFFFFF
+	//grid.Param[4][3] =  0xFFFFFF
+	//grid.Param[5][3] =  0xFFFFFF
+	//
+	//grid.Param[0][21] =  0xFFFFFF
+	//grid.Param[1][21] =  0xFFFFFF
+	//grid.Param[2][21] =  0xFFFFFF
+	//grid.Param[3][21] =  0xFFFFFF
+	//grid.Param[4][21] =  0xFFFFFF
+	//grid.Param[5][21] =  0xFFFFFF
 	return grid.Param
 }
 
