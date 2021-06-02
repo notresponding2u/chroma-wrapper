@@ -35,8 +35,6 @@ func main() {
 		panic(err)
 	}
 
-	time.Sleep(5 * time.Second)
-
 	h := heatmap.NewMap()
 	g := wrapper.BasicGrid()
 
@@ -46,24 +44,25 @@ func main() {
 
 	for ev := range evChan {
 		//fmt.Println("hook: ", ev)
-		if k, check := h[ev.Rawcode]; check {
-			if ev.Rawcode == 13 {
-				heatmap.HeatUp(heatmap.Key{
-					X: 3,
-					Y: 14,
-				}, g)
-				heatmap.HeatUp(heatmap.Key{
-					X: 4,
-					Y: 21,
-				}, g)
-			} else {
-				heatmap.HeatUp(k, g)
+		if ev.Kind == hook.KeyUp {
+			if k, check := h[ev.Rawcode]; check {
+				if ev.Rawcode == 13 {
+					heatmap.HeatUp(heatmap.Key{
+						X: 3,
+						Y: 14,
+					}, g)
+					heatmap.HeatUp(heatmap.Key{
+						X: 4,
+						Y: 21,
+					}, g)
+				} else {
+					heatmap.HeatUp(k, g)
+				}
+				err = w.MakeKeyboardRequest(&g)
+				if err != nil {
+					panic(err)
+				}
 			}
-			err = w.MakeKeyboardRequest(&g)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Printf("updated %d", &g.Param[k.X][k.Y])
 		}
 	}
 

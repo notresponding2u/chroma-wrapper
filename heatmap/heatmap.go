@@ -1,6 +1,7 @@
 package heatmap
 
 import (
+	"fmt"
 	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 )
 
@@ -10,10 +11,18 @@ type Key struct {
 }
 
 func HeatUp(k Key, grid *effect.KeyboardGrid) {
-	//if grid.Param[k.X][k.Y] >= 0x0000FF {
-	//	grid.Param[k.X][k.Y]--
-	//}
-	grid.Param[k.X][k.Y] = 0xFFFFFF
+	if grid.Param[k.X][k.Y] >= 0x0000FF {
+		switch {
+		case grid.Param[k.X][k.Y] > 0x00FFFF:
+			fmt.Println("less blue")
+			grid.Param[k.X][k.Y] -= 0x010000
+			grid.Param[k.X][k.Y] += 0x000101
+		case grid.Param[k.X][k.Y] > 0x0000FF && grid.Param[k.X][k.Y] < 0xFF00FF:
+			fmt.Println("less green")
+			grid.Param[k.X][k.Y] -= 0x000100
+			grid.Param[k.X][k.Y] += 0x010001
+		}
+	}
 }
 
 func NewMap() map[uint16]Key {
