@@ -47,7 +47,18 @@ func main() {
 	for ev := range evChan {
 		//fmt.Println("hook: ", ev)
 		if k, check := h[ev.Rawcode]; check {
-			heatmap.HeatUp(k, g)
+			if ev.Rawcode == 13 {
+				heatmap.HeatUp(heatmap.Key{
+					X: 3,
+					Y: 14,
+				}, g)
+				heatmap.HeatUp(heatmap.Key{
+					X: 4,
+					Y: 21,
+				}, g)
+			} else {
+				heatmap.HeatUp(k, g)
+			}
 			err = w.MakeKeyboardRequest(&g)
 			if err != nil {
 				panic(err)

@@ -1,7 +1,6 @@
 package heatmap
 
 import (
-	"fmt"
 	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 )
 
@@ -11,10 +10,10 @@ type Key struct {
 }
 
 func HeatUp(k Key, grid *effect.KeyboardGrid) {
-	fmt.Printf("changed %d", grid.Param[k.X][k.Y])
-	if grid.Param[k.X][k.Y] >= 0x0000FF {
-		grid.Param[k.X][k.Y]--
-	}
+	//if grid.Param[k.X][k.Y] >= 0x0000FF {
+	//	grid.Param[k.X][k.Y]--
+	//}
+	grid.Param[k.X][k.Y] = 0xFFFFFF
 }
 
 func NewMap() map[uint16]Key {
@@ -40,7 +39,7 @@ func NewMap() map[uint16]Key {
 		X: 4,
 		Y: 1,
 	}
-	m[168] = Key{
+	m[162] = Key{
 		X: 5,
 		Y: 1,
 	}
@@ -49,7 +48,8 @@ func NewMap() map[uint16]Key {
 		X: 1,
 		Y: 2,
 	}
-	m[80] = Key{
+	m[81] = Key{
+
 		X: 2,
 		Y: 2,
 	}
@@ -166,7 +166,7 @@ func NewMap() map[uint16]Key {
 		X: 2,
 		Y: 7,
 	}
-	m[71] = Key{
+	m[72] = Key{
 		X: 3,
 		Y: 7,
 	}
@@ -254,7 +254,7 @@ func NewMap() map[uint16]Key {
 		X: 2,
 		Y: 11,
 	}
-	m[86] = Key{
+	m[186] = Key{
 		X: 3,
 		Y: 11,
 	}
@@ -418,7 +418,7 @@ func NewMap() map[uint16]Key {
 		X: 4,
 		Y: 19,
 	}
-	m[45] = Key{
+	m[96] = Key{
 		X: 5,
 		Y: 19,
 	}
@@ -439,7 +439,7 @@ func NewMap() map[uint16]Key {
 		X: 4,
 		Y: 20,
 	}
-	m[46] = Key{
+	m[110] = Key{
 		X: 5,
 		Y: 20,
 	}
