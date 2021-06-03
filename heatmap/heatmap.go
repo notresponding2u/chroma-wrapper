@@ -10,17 +10,30 @@ type Key struct {
 	Y int64
 }
 
+/**
+LOGIC:
+FF0000
+FFFF00
+00FF00
+00FFFF
+0000FF
+*/
+
 func HeatUp(k Key, grid *effect.KeyboardGrid) {
 	if grid.Param[k.X][k.Y] >= 0x0000FF {
 		switch {
-		case grid.Param[k.X][k.Y] > 0x00FFFF:
+		case grid.Param[k.X][k.Y]&0xFF0000 == 0xFF0000 && grid.Param[k.X][k.Y] != 0xFFFF00: //	From blue to blue/green
+			fmt.Println("more green")
+			grid.Param[k.X][k.Y] += 0x000100
+		case (grid.Param[k.X][k.Y]&0x00FF00 == 0x00FF00 || grid.Param[k.X][k.Y] == 0xFFFF00) && grid.Param[k.X][k.Y] > 0x00FFFF: // From blue/green to green
 			fmt.Println("less blue")
 			grid.Param[k.X][k.Y] -= 0x010000
-			grid.Param[k.X][k.Y] += 0x000101
-		case grid.Param[k.X][k.Y] > 0x0000FF && grid.Param[k.X][k.Y] < 0xFF00FF:
+		case (grid.Param[k.X][k.Y] < 0x00FFFF || grid.Param[k.X][k.Y] == 0x00FF00) && grid.Param[k.X][k.Y]&0x0000FF != 0x0000FF: //	From green to green/red
+			fmt.Println("more red")
+			grid.Param[k.X][k.Y] += 0x000001
+		case grid.Param[k.X][k.Y] <= 0x0FFFF && grid.Param[k.X][k.Y] > 0x0000FF: //	From green/red to red
 			fmt.Println("less green")
 			grid.Param[k.X][k.Y] -= 0x000100
-			grid.Param[k.X][k.Y] += 0x010001
 		}
 	}
 }
