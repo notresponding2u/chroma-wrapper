@@ -15,12 +15,12 @@ func TestHeatUp(t *testing.T) {
 	i := 0
 	for {
 		i++
-		fmt.Printf("color: %X\n", g.Param[k.X][k.Y])
+		fmt.Printf("%d color: %X\n", i, g.Param[k.X][k.Y])
 		HeatUp(k, g)
-		if g.Param[k.X][k.Y] <= 0x0000FF {
-			break
-		}
-		if i > 258 {
+		//if g.Param[k.X][k.Y] <= 0x0000FF {
+		//	break
+		//}
+		if i > 1030 {
 			break
 		}
 	}
