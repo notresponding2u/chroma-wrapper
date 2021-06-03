@@ -147,7 +147,6 @@ func (w *wrapper) heartbeat() {
 			panic(errors.New(fmt.Sprintf("Status code %d", res.StatusCode)))
 		}
 
-		fmt.Println("Beep")
 		time.Sleep(time.Second)
 	}
 }

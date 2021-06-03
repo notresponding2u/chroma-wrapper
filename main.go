@@ -26,7 +26,6 @@ func main() {
 			panic(err)
 		}
 	}()
-	//err = w.Static()
 
 	time.Sleep(2 * time.Second)
 
