@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/notresponding2u/chroma-wrapper/heatmap"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
 	hook "github.com/robotn/gohook"
@@ -37,12 +36,10 @@ func main() {
 	h := heatmap.NewMap()
 	g := wrapper.BasicGrid()
 
-	fmt.Println("hook start...")
 	evChan := hook.Start()
 	defer hook.End()
 
 	for ev := range evChan {
-		//fmt.Println("hook: ", ev)
 		if ev.Kind == hook.KeyUp {
 			if k, check := h[ev.Rawcode]; check {
 				if ev.Rawcode == 13 {

@@ -213,16 +213,11 @@ func (w *wrapper) makeRequest(e interface{}, url string, method string) error {
 		return errors.New(fmt.Sprintf("Status code: %d", response.Result))
 	}
 
-	fmt.Printf("%d\n%s", response.Result, response.Id)
-
 	return err
 
 }
 
 func (w *wrapper) setEffect(ef SdkResponse) error {
-	//w.List.Ids = append(w.List.Ids, ef.Id)
-	fmt.Println(ef.Id)
-
 	e := &effect.Identifier{Id: ef.Id}
 	url := fmt.Sprintf("%s/effect", w.session.Uri)
 
