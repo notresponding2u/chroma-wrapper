@@ -252,5 +252,26 @@ func BasicGrid() *effect.KeyboardGrid {
 		Effect: effect.Custom,
 		Param:  GetKeyboardStruct(),
 	}
+	var color int64 = 0xFF0000
+	for i := 0; i < 255; i++ {
+		color += 0x000100
+		e.ColorMap[i] = color
+	}
+	color = 0xFFFF00
+	for i := 255; i < 510; i++ {
+		color -= 0x010000
+		e.ColorMap[i] = color
+	}
+	color = 0x00FF00
+	for i := 510; i < 765; i++ {
+		color += 0x000001
+		e.ColorMap[i] = color
+	}
+	color = 0x00FFFF
+	for i := 765; i < 1021; i++ {
+		color -= 0x000100
+		e.ColorMap[i] = color
+	}
+
 	return e
 }

@@ -46,16 +46,16 @@ func main() {
 		if ev.Kind == hook.KeyUp {
 			if k, check := h[ev.Rawcode]; check {
 				if ev.Rawcode == 13 {
-					heatmap.HeatUp(heatmap.Key{
+					heatmap.Remap(heatmap.Key{
 						X: 3,
 						Y: 14,
 					}, g)
-					heatmap.HeatUp(heatmap.Key{
+					heatmap.Remap(heatmap.Key{
 						X: 4,
 						Y: 21,
 					}, g)
 				} else {
-					heatmap.HeatUp(k, g)
+					heatmap.Remap(k, g)
 				}
 				err = w.MakeKeyboardRequest(&g)
 				if err != nil {

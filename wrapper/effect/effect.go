@@ -19,7 +19,15 @@ type List struct {
 	Ids []string `json:"ids"`
 }
 
+//type Number struct {
+//	Number int64
+//	Value  int64
+//}
+
 type KeyboardGrid struct {
-	Effect string       `json:"effect"`
-	Param  [6][22]int64 `json:"param"`
+	ColorMap      [1021]int64  `json:"-"`
+	MapCount      [6][22]int64 `json:"-"`
+	MaxKeyPresses int64        `json:"-"`
+	Effect        string       `json:"effect"`
+	Param         [6][22]int64 `json:"param"`
 }

@@ -18,22 +18,51 @@ FFFF00
 0000FF
 */
 
-func HeatUp(k Key, grid *effect.KeyboardGrid) {
-	if grid.Param[k.X][k.Y] >= 0x0000FF {
-		switch {
-		case grid.Param[k.X][k.Y]&0xFF0000 == 0xFF0000 && grid.Param[k.X][k.Y] != 0xFFFF00: //	From blue to blue/green
-			//fmt.Println("more green")
-			grid.Param[k.X][k.Y] += 0x000100
-		case (grid.Param[k.X][k.Y]&0x00FF00 == 0x00FF00 || grid.Param[k.X][k.Y] == 0xFFFF00) && grid.Param[k.X][k.Y] > 0x00FFFF: // From blue/green to green
-			//fmt.Println("less blue")
-			grid.Param[k.X][k.Y] -= 0x010000
-		case (grid.Param[k.X][k.Y] < 0x00FFFF || grid.Param[k.X][k.Y] == 0x00FF00) && grid.Param[k.X][k.Y]&0x0000FF != 0x0000FF: //	From green to green/red
-			//fmt.Println("more red")
-			grid.Param[k.X][k.Y] += 0x000001
-		case grid.Param[k.X][k.Y] <= 0x0FFFF && grid.Param[k.X][k.Y] > 0x0000FF: //	From green/red to red
-			//fmt.Println("less green")
-			grid.Param[k.X][k.Y] -= 0x000100
+func Remap(k Key, grid *effect.KeyboardGrid) {
+	grid.MapCount[k.X][k.Y]++
+	if grid.MaxKeyPresses < grid.MapCount[k.X][k.Y] {
+		grid.MaxKeyPresses = grid.MapCount[k.X][k.Y]
+	}
+	for x, _ := range grid.Param {
+		for y, _ := range grid.Param[x] {
+			switch grid.MapCount[x][y] {
+			case grid.MaxKeyPresses:
+				grid.Param[x][y] = 0x0000FF
+			case 0:
+				grid.Param[x][y] = 0xFF0000
+			default:
+				//percentage := grid.MapCount[x][y] * 100 / grid.MaxKeyPresses * int64(len(grid.ColorMap)) / 100
+				percentage := float64(grid.MapCount[x][y]) / float64(grid.MaxKeyPresses) * float64(len(grid.ColorMap))
+				if int64(percentage) >= int64(len(grid.ColorMap)) {
+					grid.Param[x][y] = 0x0000FF
+				} else {
+					grid.Param[x][y] = grid.ColorMap[int64(percentage)]
+				}
+			}
 		}
+	}
+}
+
+func HeatUp(k Key, grid *effect.KeyboardGrid) {
+	if grid.Param[k.X][k.Y] > 0x0000FF {
+		grid.Param[k.X][k.Y] = grid.ColorMap[grid.MapCount[k.X][k.Y]]
+		grid.MapCount[k.X][k.Y]++
+
+		// So sad that I don't want this q.Q
+		//switch {
+		//case grid.Param[k.X][k.Y]&0xFF0000 == 0xFF0000 && grid.Param[k.X][k.Y] != 0xFFFF00: //	From blue to blue/green
+		//	fmt.Println("more green")
+		//	grid.Param[k.X][k.Y] += 0x000100
+		//case (grid.Param[k.X][k.Y]&0x00FF00 == 0x00FF00 || grid.Param[k.X][k.Y] == 0xFFFF00) && grid.Param[k.X][k.Y] > 0x00FFFF: // From blue/green to green
+		//	fmt.Println("less blue")
+		//	grid.Param[k.X][k.Y] -= 0x010000
+		//case (grid.Param[k.X][k.Y] < 0x00FFFF || grid.Param[k.X][k.Y] == 0x00FF00) && grid.Param[k.X][k.Y]&0x0000FF != 0x0000FF: //	From green to green/red
+		//	fmt.Println("more red")
+		//	grid.Param[k.X][k.Y] += 0x000001
+		//case grid.Param[k.X][k.Y] <= 0x0FFFF && grid.Param[k.X][k.Y] > 0x0000FF: //	From green/red to red
+		//	fmt.Println("less green")
+		//	grid.Param[k.X][k.Y] -= 0x000100
+		//}
 	}
 }
 
