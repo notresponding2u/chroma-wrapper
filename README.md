@@ -6,5 +6,6 @@ There are bugs:
 - Works only on Windows 10.
 - No exit, except ctrl+c
 - You need to install Connect from Razer synapse to be able to connect to the SDK.
+- The library with the hook is throwing some error, because of US keyboard layout. But still works fine for the effect.
 
 I will add some other functionalities later.
