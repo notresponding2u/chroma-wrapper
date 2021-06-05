@@ -3,6 +3,7 @@ package heatmap
 import (
 	"fmt"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
+	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 	"testing"
 )
 
@@ -30,4 +31,12 @@ func TestHeatUp(t *testing.T) {
 		}
 	}
 
+}
+
+func TestLoadFile(t *testing.T) {
+	e := &effect.KeyboardGrid{}
+	err := LoadFile(e, "../"+FileAllTimeHeatMap)
+	if err != nil {
+		t.Fatal(err)
+	}
 }

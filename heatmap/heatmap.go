@@ -1,8 +1,13 @@
 package heatmap
 
 import (
+	"encoding/json"
 	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
+	"io/ioutil"
+	"os"
 )
+
+const FileAllTimeHeatMap = "./AllTimeHeatMap.json"
 
 type Key struct {
 	X int64
@@ -41,6 +46,71 @@ func Remap(k Key, grid *effect.KeyboardGrid) {
 			}
 		}
 	}
+}
+
+func Load() {
+
+}
+
+func SaveMap(e *effect.KeyboardGrid) error {
+	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
+		err = save(e, FileAllTimeHeatMap)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = LoadFile(e, FileAllTimeHeatMap)
+		if err != nil {
+			return err
+		}
+
+		err = save(e, FileAllTimeHeatMap)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func save(e *effect.KeyboardGrid, file string) error {
+	j, err := json.Marshal(e.MapCount)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(file, j, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func mergeHeatmaps(receiver *effect.KeyboardGrid, donor *effect.KeyboardGrid) {
+	for x, _ := range receiver.MapCount {
+		for y, _ := range receiver.MapCount[x] {
+			receiver.MapCount[x][y] += donor.MapCount[x][y]
+			if receiver.MapCount[x][y] > receiver.MaxKeyPresses {
+				receiver.MaxKeyPresses = receiver.MapCount[x][y]
+			}
+		}
+	}
+}
+
+func LoadFile(e *effect.KeyboardGrid, file string) error {
+	g := &effect.KeyboardGrid{}
+
+	j, err := ioutil.ReadFile(file)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(j, &g.MapCount)
+	if err != nil {
+		return err
+	}
+
+	mergeHeatmaps(e, g)
+
+	return os.Remove(file)
 }
 
 func HeatUp(k Key, grid *effect.KeyboardGrid) {

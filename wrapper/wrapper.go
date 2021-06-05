@@ -14,6 +14,7 @@ import (
 type wrapper struct {
 	url                string
 	applicationContent string
+	dead               chan bool
 	session            connectionResponse
 	List               effect.List
 	Client             *http.Client
@@ -30,6 +31,7 @@ type app struct {
 	Author          author   `json:"author"`
 	DeviceSupported []string `json:"device_supported"`
 	Category        string   `json:"category"`
+	alive           chan bool
 }
 
 type connectionResponse struct {
@@ -72,6 +74,7 @@ func New(
 	w := &wrapper{
 		url:                url,
 		applicationContent: "application/json",
+		dead:               make(chan bool),
 	}
 	a := app{
 		Title:       title,
@@ -125,29 +128,35 @@ func (w *wrapper) openConnection(a app) error {
 		},
 		Timeout: time.Duration(5) * time.Second,
 	}
+
 	return nil
 }
 
 func (w *wrapper) heartbeat() {
 	for {
-		url := fmt.Sprintf("%s/heartbeat", w.session.Uri)
+		select {
+		case <-w.dead:
+			return
+		default:
+			url := fmt.Sprintf("%s/heartbeat", w.session.Uri)
 
-		req, err := http.NewRequest(http.MethodPut, url, nil)
-		if err != nil {
-			panic(err)
+			req, err := http.NewRequest(http.MethodPut, url, nil)
+			if err != nil {
+				panic(err)
+			}
+
+			res, err := w.Client.Do(req)
+			if err != nil {
+				panic(err)
+			}
+
+			defer res.Body.Close()
+			if res.StatusCode != 200 {
+				panic(errors.New(fmt.Sprintf("Status code %d", res.StatusCode)))
+			}
+
+			time.Sleep(time.Second)
 		}
-
-		res, err := w.Client.Do(req)
-		if err != nil {
-			panic(err)
-		}
-
-		defer res.Body.Close()
-		if res.StatusCode != 200 {
-			panic(errors.New(fmt.Sprintf("Status code %d", res.StatusCode)))
-		}
-
-		time.Sleep(time.Second)
 	}
 }
 
@@ -157,6 +166,8 @@ func (w *wrapper) deleteEffects() error {
 }
 
 func (w *wrapper) Close() error {
+	w.dead <- false
+	time.Sleep(2 * time.Second)
 	return w.makeRequest(nil, w.session.Uri, http.MethodDelete)
 	//err = w.deleteEffects()
 }
@@ -247,6 +258,13 @@ func BasicGrid() *effect.KeyboardGrid {
 		Effect: effect.Custom,
 		Param:  GetKeyboardStruct(),
 	}
+
+	setColorMap(e)
+
+	return e
+}
+
+func setColorMap(e *effect.KeyboardGrid) {
 	var color int64 = 0xFF0000
 	for i := 0; i < 255; i++ {
 		color += 0x000100
@@ -267,6 +285,4 @@ func BasicGrid() *effect.KeyboardGrid {
 		color -= 0x000100
 		e.ColorMap[i] = color
 	}
-
-	return e
 }

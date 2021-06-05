@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"github.com/notresponding2u/chroma-wrapper/heatmap"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
 	hook "github.com/robotn/gohook"
+	"log"
 	"time"
 )
 
@@ -19,12 +21,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer func() {
-		err = w.Close()
-		if err != nil {
-			panic(err)
-		}
-	}()
 
 	time.Sleep(2 * time.Second)
 
@@ -57,6 +53,30 @@ func main() {
 				err = w.MakeKeyboardRequest(&g)
 				if err != nil {
 					panic(err)
+				}
+			}
+			if ev.Rawcode == 123 {
+				err = heatmap.SaveMap(g)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				err = w.Close()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				break
+			}
+			if ev.Rawcode == 122 {
+				err = heatmap.LoadFile(g, heatmap.FileAllTimeHeatMap)
+				if err != nil {
+					log.Fatal(err)
+				}
+				fmt.Println(ev)
+				err = w.MakeKeyboardRequest(g)
+				if err != nil {
+					log.Fatal(err)
 				}
 			}
 		}
