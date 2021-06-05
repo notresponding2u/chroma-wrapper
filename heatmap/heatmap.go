@@ -54,22 +54,15 @@ func Load() {
 
 func SaveMap(e *effect.KeyboardGrid) error {
 	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
-		err = save(e, FileAllTimeHeatMap)
-		if err != nil {
-			return err
-		}
+		return save(e, FileAllTimeHeatMap)
 	} else {
 		err = LoadFile(e, FileAllTimeHeatMap)
 		if err != nil {
 			return err
 		}
 
-		err = save(e, FileAllTimeHeatMap)
-		if err != nil {
-			return err
-		}
+		return save(e, FileAllTimeHeatMap)
 	}
-	return nil
 }
 
 func save(e *effect.KeyboardGrid, file string) error {
@@ -96,21 +89,25 @@ func mergeHeatmaps(receiver *effect.KeyboardGrid, donor *effect.KeyboardGrid) {
 }
 
 func LoadFile(e *effect.KeyboardGrid, file string) error {
-	g := &effect.KeyboardGrid{}
+	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
+		return nil
+	} else {
+		g := &effect.KeyboardGrid{}
 
-	j, err := ioutil.ReadFile(file)
-	if err != nil {
-		return err
+		j, err := ioutil.ReadFile(file)
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(j, &g.MapCount)
+		if err != nil {
+			return err
+		}
+
+		mergeHeatmaps(e, g)
+
+		return os.Remove(file)
 	}
-
-	err = json.Unmarshal(j, &g.MapCount)
-	if err != nil {
-		return err
-	}
-
-	mergeHeatmaps(e, g)
-
-	return os.Remove(file)
 }
 
 func HeatUp(k Key, grid *effect.KeyboardGrid) {
