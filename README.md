@@ -9,3 +9,9 @@ There are bugs:
 - The library with the hook is throwing some error, because of US keyboard layout. But still works fine for the effect.
 
 I will add some other functionalities later.
+
+## Interface
+
+F12 to exit
+
+F11 to load all time build up heatmap.
