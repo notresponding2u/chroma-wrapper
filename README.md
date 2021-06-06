@@ -12,6 +12,10 @@ I will add some other functionalities later.
 
 ## Interface
 
-F12 to exit
+F12 to save exit.
 
 F11 to load all time build up heatmap.
+
+F10 to save the map and start new one.
+
+F9 discard current map.

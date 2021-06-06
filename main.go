@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/notresponding2u/chroma-wrapper/heatmap"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
 	hook "github.com/robotn/gohook"
@@ -53,6 +54,30 @@ func main() {
 					}
 
 					heatmap.Remap(k, g)
+
+					fmt.Printf("Map merged with all times.")
+				} else if ev.Rawcode == 121 {
+					err = heatmap.LoadFile(g, heatmap.FileAllTimeHeatMap)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					err = heatmap.SaveMap(g)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					g = wrapper.BasicGrid()
+
+					heatmap.Remap(k, g)
+
+					fmt.Println("Map saved and new loaded.")
+				} else if ev.Rawcode == 120 {
+					g = wrapper.BasicGrid()
+
+					heatmap.Remap(k, g)
+
+					fmt.Println("Map discarded")
 				} else {
 					heatmap.Remap(k, g)
 				}
