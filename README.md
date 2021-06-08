@@ -19,3 +19,11 @@ F11 to load all time build up heatmap.
 F10 to save the map and start new one.
 
 F9 discard current map.
+
+## Build
+
+To build as background process use this:
+
+```shell
+go build -ldflags -H=windowsgui
+```
