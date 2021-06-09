@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type wrapper struct {
+type Wrapper struct {
 	url                string
 	applicationContent string
 	dead               chan bool
@@ -70,8 +70,8 @@ func New(
 	title string,
 	description string,
 	device []string,
-) (*wrapper, error) {
-	w := &wrapper{
+) (*Wrapper, error) {
+	w := &Wrapper{
 		url:                url,
 		applicationContent: "application/json",
 		dead:               make(chan bool),
@@ -94,7 +94,7 @@ func New(
 	return w, nil
 }
 
-func (w *wrapper) openConnection(a app) error {
+func (w *Wrapper) openConnection(a app) error {
 	payload, err := json.Marshal(a)
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func (w *wrapper) openConnection(a app) error {
 	return nil
 }
 
-func (w *wrapper) heartbeat() {
+func (w *Wrapper) heartbeat() {
 	for {
 		select {
 		case <-w.dead:
@@ -160,19 +160,19 @@ func (w *wrapper) heartbeat() {
 	}
 }
 
-func (w *wrapper) deleteEffects() error {
+func (w *Wrapper) deleteEffects() error {
 	url := fmt.Sprintf("%s/effect", w.session.Uri)
 	return w.makeRequest(w.List, url, http.MethodDelete)
 }
 
-func (w *wrapper) Close() error {
+func (w *Wrapper) Close() error {
 	w.dead <- false
 	time.Sleep(2 * time.Second)
 	return w.makeRequest(nil, w.session.Uri, http.MethodDelete)
 	//err = w.deleteEffects()
 }
 
-func (w *wrapper) Static() error {
+func (w *Wrapper) Static() error {
 	e := &effect.Effect{
 		Effect: effect.Static,
 		Param:  effect.Param{Color: 200},
@@ -180,12 +180,12 @@ func (w *wrapper) Static() error {
 	return w.MakeKeyboardRequest(e)
 }
 
-func (w *wrapper) MakeKeyboardRequest(e interface{}) error {
+func (w *Wrapper) MakeKeyboardRequest(e interface{}) error {
 	url := fmt.Sprintf("%s/keyboard", w.session.Uri)
 	return w.makeRequest(e, url, http.MethodPut)
 }
 
-func (w *wrapper) makeRequest(e interface{}, url string, method string) error {
+func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
 	payload, err := json.Marshal(&e)
 	if err != nil {
 		return err
@@ -228,7 +228,7 @@ func (w *wrapper) makeRequest(e interface{}, url string, method string) error {
 
 }
 
-func (w *wrapper) setEffect(ef SdkResponse) error {
+func (w *Wrapper) setEffect(ef SdkResponse) error {
 	e := &effect.Identifier{Id: ef.Id}
 	url := fmt.Sprintf("%s/effect", w.session.Uri)
 
@@ -245,7 +245,7 @@ func GetKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
 	return grid.Param
 }
 
-func (w *wrapper) Custom() error {
+func (w *Wrapper) Custom() error {
 	e := &effect.KeyboardGrid{
 		Effect: effect.Custom,
 		Param:  GetKeyboardStruct(),

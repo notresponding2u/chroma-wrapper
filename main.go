@@ -6,6 +6,7 @@ import (
 	"github.com/getlantern/systray/example/icon"
 	"github.com/notresponding2u/chroma-wrapper/heatmap"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
+	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 	hook "github.com/robotn/gohook"
 	"log"
 	"time"
@@ -38,25 +39,15 @@ func main() {
 	evChan := hook.Start()
 	defer hook.End()
 
-	go func() {
-		systray.Run(onReady, onExit)
-		evChan <- hook.Event{
-			Kind:      hook.KeyUp,
-			When:      time.Time{},
-			Mask:      0,
-			Reserved:  0,
-			Keycode:   0,
-			Rawcode:   123,
-			Keychar:   0,
-			Button:    0,
-			Clicks:    0,
-			X:         0,
-			Y:         0,
-			Amount:    0,
-			Rotation:  0,
-			Direction: 0,
-		}
-	}()
+	go startTray(g, w, evChan)
+
+	//for  {
+	//	select {
+	//	case ev:=<-evChan:
+	//
+	//	}
+	//
+	//}
 
 	for ev := range evChan {
 		if ev.Kind == hook.KeyUp {
@@ -110,20 +101,22 @@ func main() {
 				}
 			}
 			if ev.Rawcode == 123 {
-				err = heatmap.SaveMap(g)
-				if err != nil {
-					log.Fatal(err)
-				}
+				// Quitting
+				systray.Quit()
 
-				err = w.Close()
-				if err != nil {
-					log.Fatal(err)
-				}
+				break
+			}
 
+			if ev.Rawcode == 0 {
+				// Quitting
 				break
 			}
 		}
 	}
+}
+
+func startTray(g *effect.KeyboardGrid, w *wrapper.Wrapper, evChan chan hook.Event) {
+	systray.Run(onReady, onExit(g, w, evChan))
 }
 
 func onReady() {
@@ -141,5 +134,20 @@ func onReady() {
 	}
 }
 
-func onExit() {
+func onExit(g *effect.KeyboardGrid, w *wrapper.Wrapper, evChan chan hook.Event) func() {
+	return func() {
+		err := heatmap.SaveMap(g)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = w.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		evChan <- hook.Event{
+			Kind: hook.KeyUp,
+		}
+	}
 }
