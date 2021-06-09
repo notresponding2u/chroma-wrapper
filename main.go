@@ -128,8 +128,8 @@ func main() {
 
 func onReady() {
 	systray.SetIcon(icon.Data)
-	systray.SetTitle("Awesome App")
-	systray.SetTooltip("Pretty awesome超级棒")
+	systray.SetTitle("Chroma heatmap")
+	systray.SetTooltip("Chroma heatmap")
 	mQuit := systray.AddMenuItem("Quit	F12", "Quit the whole app")
 	mQuit.SetIcon(icon.Data)
 
