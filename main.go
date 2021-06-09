@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/getlantern/systray"
+	"github.com/getlantern/systray/example/icon"
 	"github.com/notresponding2u/chroma-wrapper/heatmap"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
 	hook "github.com/robotn/gohook"
@@ -10,6 +12,7 @@ import (
 )
 
 func main() {
+
 	w, err := wrapper.New(
 		"http://localhost:54235/razer/chromasdk",
 		"L",
@@ -34,6 +37,26 @@ func main() {
 
 	evChan := hook.Start()
 	defer hook.End()
+
+	go func() {
+		systray.Run(onReady, onExit)
+		evChan <- hook.Event{
+			Kind:      hook.KeyUp,
+			When:      time.Time{},
+			Mask:      0,
+			Reserved:  0,
+			Keycode:   0,
+			Rawcode:   123,
+			Keychar:   0,
+			Button:    0,
+			Clicks:    0,
+			X:         0,
+			Y:         0,
+			Amount:    0,
+			Rotation:  0,
+			Direction: 0,
+		}
+	}()
 
 	for ev := range evChan {
 		if ev.Kind == hook.KeyUp {
@@ -101,5 +124,22 @@ func main() {
 			}
 		}
 	}
+}
 
+func onReady() {
+	systray.SetIcon(icon.Data)
+	systray.SetTitle("Awesome App")
+	systray.SetTooltip("Pretty awesome超级棒")
+	mQuit := systray.AddMenuItem("Quit	F12", "Quit the whole app")
+	mQuit.SetIcon(icon.Data)
+
+	for {
+		select {
+		case <-mQuit.ClickedCh:
+			systray.Quit()
+		}
+	}
+}
+
+func onExit() {
 }
