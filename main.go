@@ -41,14 +41,6 @@ func main() {
 
 	go startTray(g, w, evChan)
 
-	//for  {
-	//	select {
-	//	case ev:=<-evChan:
-	//
-	//	}
-	//
-	//}
-
 	for ev := range evChan {
 		if ev.Kind == hook.KeyUp {
 			if k, check := h[ev.Rawcode]; check {
