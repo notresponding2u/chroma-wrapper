@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 )
@@ -142,12 +143,14 @@ func (w *Wrapper) heartbeat() {
 
 			req, err := http.NewRequest(http.MethodPut, url, nil)
 			if err != nil {
-				panic(err)
+				log.Printf("Cant create request: %s", err.Error())
+				return
 			}
 
 			res, err := w.Client.Do(req)
 			if err != nil {
-				panic(err)
+				log.Printf("Missed heartbeat: %s", err.Error())
+				return
 			}
 
 			defer res.Body.Close()

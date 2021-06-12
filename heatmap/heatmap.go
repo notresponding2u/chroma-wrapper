@@ -48,10 +48,6 @@ func Remap(k Key, grid *effect.KeyboardGrid) {
 	}
 }
 
-func Load() {
-
-}
-
 func SaveMap(e *effect.KeyboardGrid) error {
 	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
 		return save(e, FileAllTimeHeatMap)
