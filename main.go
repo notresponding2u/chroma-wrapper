@@ -108,20 +108,40 @@ func main() {
 }
 
 func startTray(g *effect.KeyboardGrid, w *wrapper.Wrapper, evChan chan hook.Event) {
-	systray.Run(onReady, onExit(g, w, evChan))
+	systray.Run(onReady(evChan), onExit(g, w, evChan))
 }
 
-func onReady() {
-	systray.SetIcon(icon.Data)
-	systray.SetTitle("Chroma heatmap")
-	systray.SetTooltip("Chroma heatmap")
-	mQuit := systray.AddMenuItem("Quit	F12", "Quit the whole app")
-	mQuit.SetIcon(icon.Data)
+func onReady(evChan chan hook.Event) func() {
+	return func() {
+		systray.SetIcon(icon.Data)
+		systray.SetTitle("Chroma heatmap")
+		systray.SetTooltip("Chroma heatmap")
 
-	for {
-		select {
-		case <-mQuit.ClickedCh:
-			systray.Quit()
+		mDiscard := systray.AddMenuItem("Discard	F9  ", "Discard current and start new")
+		mSaveAndNew := systray.AddMenuItem("Save and new	F10", "Save into all time and start new heatmap")
+		mMergeAndLoad := systray.AddMenuItem("Load all time	F11", "Load all time heatmap and merge to current")
+		mQuit := systray.AddMenuItem("Quit	F12", "Quit the whole app")
+
+		for {
+			select {
+			case <-mQuit.ClickedCh:
+				systray.Quit()
+			case <-mMergeAndLoad.ClickedCh:
+				evChan <- hook.Event{
+					Kind:    hook.KeyUp,
+					Rawcode: 122,
+				}
+			case <-mSaveAndNew.ClickedCh:
+				evChan <- hook.Event{
+					Kind:    hook.KeyUp,
+					Rawcode: 121,
+				}
+			case <-mDiscard.ClickedCh:
+				evChan <- hook.Event{
+					Kind:    hook.KeyUp,
+					Rawcode: 120,
+				}
+			}
 		}
 	}
 }
