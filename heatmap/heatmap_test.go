@@ -33,10 +33,26 @@ func TestHeatUp(t *testing.T) {
 
 }
 
-func TestLoadFile(t *testing.T) {
+func TestRemap(t *testing.T) {
 	e := &effect.KeyboardGrid{}
-	err := LoadFile(e, "../"+FileAllTimeHeatMap)
-	if err != nil {
-		t.Fatal(err)
+	Remap(Key{}, e)
+}
+
+func BenchmarkRemap(b *testing.B) {
+	e := &effect.KeyboardGrid{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Remap(Key{
+			X: 5,
+			Y: 5,
+		}, e)
+		Remap(Key{
+			X: 5,
+			Y: 5,
+		}, e)
+		Remap(Key{
+			X: 2,
+			Y: 5,
+		}, e)
 	}
 }

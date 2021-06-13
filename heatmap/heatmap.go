@@ -37,17 +37,16 @@ func Remap(k Key, grid *effect.KeyboardGrid) {
 	for x, _ := range grid.Param {
 		for y, _ := range grid.Param[x] {
 			switch grid.MapCount[x][y] {
-			case grid.MaxKeyPresses:
-				grid.Param[x][y] = 0x0000FF
 			case 0:
 				grid.Param[x][y] = 0xFF0000
+			case grid.MaxKeyPresses:
+				grid.Param[x][y] = 0x0000FF
 			default:
-				//percentage := grid.MapCount[x][y] * 100 / grid.MaxKeyPresses * int64(len(grid.ColorMap)) / 100
 				percentage := float64(grid.MapCount[x][y]) / float64(grid.MaxKeyPresses) * float64(len(grid.ColorMap))
-				if int64(percentage) >= int64(len(grid.ColorMap)) {
-					grid.Param[x][y] = 0x0000FF
-				} else {
+				if int64(percentage) < int64(len(grid.ColorMap)) {
 					grid.Param[x][y] = grid.ColorMap[int64(percentage)]
+				} else {
+					grid.Param[x][y] = 0x0000FF
 				}
 			}
 		}
