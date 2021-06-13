@@ -2,12 +2,18 @@ package heatmap
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/getlantern/systray"
+	"github.com/notresponding2u/chroma-wrapper/wrapper"
 	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
+	hook "github.com/robotn/gohook"
 	"io/ioutil"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
-const FileAllTimeHeatMap = "./AllTimeHeatMap.json"
+const FileAllTimeHeatMap = "./AllTimejson"
 
 type Key struct {
 	X int64
@@ -84,6 +90,90 @@ func mergeHeatmaps(receiver *effect.KeyboardGrid, donor *effect.KeyboardGrid) {
 	}
 }
 
+func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) error {
+	h := newMap()
+
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+	for {
+		select {
+		case ev := <-evChan:
+			if ev.Kind == hook.KeyUp {
+				if k, check := h[ev.Rawcode]; check {
+					if ev.Rawcode == 13 {
+						Remap(Key{
+							X: 3,
+							Y: 14,
+						}, g)
+						Remap(Key{
+							X: 4,
+							Y: 21,
+						}, g)
+					} else if ev.Rawcode == 122 {
+						err := LoadFile(g, FileAllTimeHeatMap)
+						if err != nil {
+							return err
+						}
+
+						Remap(k, g)
+
+						fmt.Printf("Map merged with all times.")
+					} else if ev.Rawcode == 121 {
+						err := LoadFile(g, FileAllTimeHeatMap)
+						if err != nil {
+							return err
+						}
+
+						err = SaveMap(g)
+						if err != nil {
+							return err
+						}
+
+						g = wrapper.BasicGrid()
+
+						Remap(k, g)
+
+						fmt.Println("Map saved and new loaded.")
+					} else if ev.Rawcode == 120 {
+						g = wrapper.BasicGrid()
+
+						Remap(k, g)
+
+						fmt.Println("Map discarded")
+					} else {
+						Remap(k, g)
+					}
+					err := w.MakeKeyboardRequest(&g)
+					if err != nil {
+						return err
+					}
+				}
+				if ev.Rawcode == 123 {
+					// Quitting
+					systray.Quit()
+
+					return nil
+				}
+
+				if ev.Rawcode == 0 {
+					// Quitting
+					return nil
+				}
+			}
+		case <-sigc:
+			err := SaveMap(g)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+}
+
 func LoadFile(e *effect.KeyboardGrid, file string) error {
 	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
 		return nil
@@ -129,7 +219,7 @@ func HeatUp(k Key, grid *effect.KeyboardGrid) {
 	}
 }
 
-func NewMap() map[uint16]Key {
+func newMap() map[uint16]Key {
 	m := make(map[uint16]Key)
 
 	m[27] = Key{

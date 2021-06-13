@@ -92,6 +92,14 @@ func New(
 		return nil, err
 	}
 	go w.heartbeat()
+
+	time.Sleep(2 * time.Second)
+
+	err = w.custom()
+	if err != nil {
+		return nil, err
+	}
+
 	return w, nil
 }
 
@@ -248,7 +256,7 @@ func GetKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
 	return grid.Param
 }
 
-func (w *Wrapper) Custom() error {
+func (w *Wrapper) custom() error {
 	e := &effect.KeyboardGrid{
 		Effect: effect.Custom,
 		Param:  GetKeyboardStruct(),
