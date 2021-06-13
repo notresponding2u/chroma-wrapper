@@ -19,6 +19,7 @@ type Wrapper struct {
 	session            connectionResponse
 	List               effect.List
 	Client             *http.Client
+	a                  app
 }
 
 type author struct {
@@ -76,21 +77,23 @@ func New(
 		url:                url,
 		applicationContent: "application/json",
 		dead:               make(chan bool),
-	}
-	a := app{
-		Title:       title,
-		Description: description,
-		Author: author{
-			Name:    authorName,
-			Contact: authorContact,
+		a: app{
+			Title:       title,
+			Description: description,
+			Author: author{
+				Name:    authorName,
+				Contact: authorContact,
+			},
+			DeviceSupported: device,
+			Category:        "application",
 		},
-		DeviceSupported: device,
-		Category:        "application",
 	}
-	err := w.openConnection(a)
+
+	err := w.tryConnection()
 	if err != nil {
 		return nil, err
 	}
+
 	go w.heartbeat()
 
 	time.Sleep(2 * time.Second)
@@ -103,8 +106,21 @@ func New(
 	return w, nil
 }
 
-func (w *Wrapper) openConnection(a app) error {
-	payload, err := json.Marshal(a)
+func (w *Wrapper) tryConnection() error {
+	err := w.openConnection()
+	if err != nil {
+		time.Sleep(5 * time.Second)
+		err = w.openConnection()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (w *Wrapper) openConnection() error {
+	payload, err := json.Marshal(w.a)
 	if err != nil {
 		return err
 	}
@@ -156,9 +172,20 @@ func (w *Wrapper) heartbeat() {
 			}
 
 			res, err := w.Client.Do(req)
-			if err != nil {
-				log.Printf("Missed heartbeat: %s", err.Error())
-				return
+			if err != nil || res.StatusCode != 200 {
+				time.Sleep(5 * time.Second)
+
+				err = w.tryConnection()
+				if err != nil {
+					log.Printf("Missed heartbeat, can't recoonect: %s", err.Error())
+					return
+				}
+
+				res, err = w.Client.Do(req)
+				if err != nil {
+					log.Printf("Missed heartbeat: %s", err.Error())
+					return
+				}
 			}
 
 			defer res.Body.Close()
@@ -210,8 +237,21 @@ func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := w.Client.Do(req)
-	if err != nil {
-		return err
+	if err != nil || res.StatusCode != 200 {
+
+		time.Sleep(5 * time.Second)
+
+		err = w.tryConnection()
+		if err != nil {
+			log.Printf("Can't recoonect: %s", err.Error())
+			return err
+		}
+
+		res, err = w.Client.Do(req)
+		if err != nil {
+			return err
+
+		}
 	}
 
 	defer res.Body.Close()
