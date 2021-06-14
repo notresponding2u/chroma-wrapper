@@ -168,7 +168,8 @@ func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) 
 			if err != nil {
 				return err
 			}
-			return nil
+
+			return w.Close()
 		}
 	}
 }

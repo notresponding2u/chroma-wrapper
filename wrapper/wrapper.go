@@ -352,13 +352,6 @@ func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
 
 }
 
-func (w *Wrapper) setEffect(ef SdkResponse) error {
-	e := &effect.Identifier{Id: ef.Id}
-	url := fmt.Sprintf("%s/effect", w.session.Uri)
-
-	return w.makeRequest(e, url, http.MethodPost)
-}
-
 func GetKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
 	var grid effect.KeyboardGrid
 	for i, _ := range grid.Param {
