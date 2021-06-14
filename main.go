@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"github.com/getlantern/systray"
 	"github.com/getlantern/systray/example/icon"
 	"github.com/notresponding2u/chroma-wrapper/heatmap"
@@ -9,17 +8,9 @@ import (
 	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 	hook "github.com/robotn/gohook"
 	"log"
-	"os"
 )
 
-const LockFile = "lock"
-
 func main() {
-	err := lock()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	w, err := wrapper.New(
 		"http://localhost:54235/razer/chromasdk",
 		"L",
@@ -43,36 +34,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	err = unlock()
-	if err != nil {
-		log.Fatal()
-	}
-}
-
-func lock() error {
-	if _, err := os.Stat(LockFile); err == nil {
-		return errors.New("heatmap already running")
-	}
-
-	f, err := os.Create(LockFile)
-
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		err = f.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	return nil
-}
-
-func unlock() error {
-	return os.Remove(LockFile)
 }
 
 func startTray(g *effect.KeyboardGrid, w *wrapper.Wrapper, evChan chan hook.Event) {

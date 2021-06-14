@@ -9,8 +9,12 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"sync"
 	"time"
 )
+
+const SessionFile = "session.json"
 
 type Wrapper struct {
 	url                string
@@ -20,6 +24,8 @@ type Wrapper struct {
 	List               effect.List
 	Client             *http.Client
 	a                  app
+	retryConnection    bool
+	sync.Mutex
 }
 
 type author struct {
@@ -87,6 +93,7 @@ func New(
 			DeviceSupported: device,
 			Category:        "application",
 		},
+		retryConnection: true,
 	}
 
 	err := w.tryConnection()
@@ -107,19 +114,62 @@ func New(
 }
 
 func (w *Wrapper) tryConnection() error {
-	err := w.openConnection()
-	if err != nil {
-		time.Sleep(5 * time.Second)
-		err = w.openConnection()
+	if w.retryConnection {
+		w.Lock()
+		w.retryConnection = false
+		w.Unlock()
+
+		err := w.openConnection()
 		if err != nil {
-			return err
+			time.Sleep(5 * time.Second)
+			err = w.openConnection()
+			if err != nil {
+				return err
+			}
 		}
+
+		w.Lock()
+		w.retryConnection = true
+		w.Unlock()
 	}
 
 	return nil
 }
 
+func (w *Wrapper) checkIfStarted() error {
+	if _, err := os.Stat(SessionFile); err == nil {
+		s, err := ioutil.ReadFile(SessionFile)
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(s, &w.session)
+		if err != nil {
+			return err
+		}
+
+		err = w.pulse()
+		if err == nil {
+			// If heartbeat successful, then there is already running app.
+			return errors.New("heatmap already running")
+		}
+	}
+	return nil
+}
+
 func (w *Wrapper) openConnection() error {
+	w.Client = &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: 20,
+		},
+		Timeout: time.Duration(5) * time.Second,
+	}
+
+	err := w.checkIfStarted()
+	if err != nil {
+		return err
+	}
+
 	payload, err := json.Marshal(w.a)
 	if err != nil {
 		return err
@@ -145,13 +195,61 @@ func (w *Wrapper) openConnection() error {
 		return err
 	}
 
-	fmt.Printf("Session %q", w.session)
+	err = saveSession(w.session)
+	if err != nil {
+		return err
+	}
 
-	w.Client = &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 20,
-		},
-		Timeout: time.Duration(5) * time.Second,
+	return nil
+}
+
+func saveSession(s connectionResponse) error {
+	f, err := os.Create(SessionFile)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	j, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Write(j)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *Wrapper) pulse() error {
+	url := fmt.Sprintf("%s/heartbeat", w.session.Uri)
+
+	req, err := http.NewRequest(http.MethodPut, url, nil)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Cant create request: %s", err.Error()))
+	}
+
+	res, err := w.Client.Do(req)
+	if err != nil || res.StatusCode != 200 {
+		time.Sleep(5 * time.Second)
+
+		err = w.tryConnection()
+		if err != nil {
+			return errors.New(fmt.Sprintf("Missed heartbeat, can't recoonect: %s", err.Error()))
+		}
+
+		res, err = w.Client.Do(req)
+		if err != nil {
+			return errors.New(fmt.Sprintf("Missed heartbeat: %s", err.Error()))
+		}
+	}
+
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("Status code %d", res.StatusCode))
 	}
 
 	return nil
@@ -163,35 +261,7 @@ func (w *Wrapper) heartbeat() {
 		case <-w.dead:
 			return
 		default:
-			url := fmt.Sprintf("%s/heartbeat", w.session.Uri)
-
-			req, err := http.NewRequest(http.MethodPut, url, nil)
-			if err != nil {
-				log.Printf("Cant create request: %s", err.Error())
-				return
-			}
-
-			res, err := w.Client.Do(req)
-			if err != nil || res.StatusCode != 200 {
-				time.Sleep(5 * time.Second)
-
-				err = w.tryConnection()
-				if err != nil {
-					log.Printf("Missed heartbeat, can't recoonect: %s", err.Error())
-					return
-				}
-
-				res, err = w.Client.Do(req)
-				if err != nil {
-					log.Printf("Missed heartbeat: %s", err.Error())
-					return
-				}
-			}
-
-			defer res.Body.Close()
-			if res.StatusCode != 200 {
-				panic(errors.New(fmt.Sprintf("Status code %d", res.StatusCode)))
-			}
+			w.pulse()
 
 			time.Sleep(time.Second)
 		}
