@@ -148,11 +148,19 @@ func (w *Wrapper) checkIfStarted() error {
 			return err
 		}
 
+		w.Lock()
+		w.retryConnection = false
+		w.Unlock()
+
 		err = w.pulse()
 		if err == nil {
 			// If heartbeat successful, then there is already running app.
 			return errors.New("heatmap already running")
 		}
+
+		w.Lock()
+		w.retryConnection = true
+		w.Unlock()
 	}
 	return nil
 }
@@ -234,8 +242,6 @@ func (w *Wrapper) pulse() error {
 
 	res, err := w.Client.Do(req)
 	if err != nil || res.StatusCode != 200 {
-		time.Sleep(5 * time.Second)
-
 		err = w.tryConnection()
 		if err != nil {
 			return errors.New(fmt.Sprintf("Missed heartbeat, can't recoonect: %s", err.Error()))
@@ -308,9 +314,6 @@ func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
 
 	res, err := w.Client.Do(req)
 	if err != nil || res.StatusCode != 200 {
-
-		time.Sleep(5 * time.Second)
-
 		err = w.tryConnection()
 		if err != nil {
 			log.Printf("Can't recoonect: %s", err.Error())
