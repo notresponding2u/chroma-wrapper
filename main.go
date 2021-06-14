@@ -15,8 +15,8 @@ func main() {
 		"http://localhost:54235/razer/chromasdk",
 		"L",
 		"notresponding2u@gmail.com",
-		"Heat map new1",
-		"Heatmap to be",
+		"Heat map",
+		"Heatmap",
 		[]string{wrapper.DeviceKeyboard},
 	)
 	if err != nil {
