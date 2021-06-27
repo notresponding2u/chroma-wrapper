@@ -2,7 +2,6 @@ package heatmap
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/getlantern/systray"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
 	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
@@ -10,7 +9,9 @@ import (
 	"io/ioutil"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 )
 
 const FileAllTimeHeatMap = "./AllTimejson"
@@ -98,12 +99,19 @@ func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) 
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
+
+	discarding := false
+	timeoutChan := make(chan bool)
+
+	m := &sync.Mutex{}
+
 	for {
 		select {
 		case ev := <-evChan:
-			if ev.Kind == hook.KeyUp {
-				if k, check := h[ev.Rawcode]; check {
-					if ev.Rawcode == 13 {
+			if k, check := h[ev.Rawcode]; check {
+				if ev.Kind == hook.KeyUp {
+					switch ev.Rawcode {
+					case 13:
 						Remap(Key{
 							X: 3,
 							Y: 14,
@@ -112,7 +120,7 @@ func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) 
 							X: 4,
 							Y: 21,
 						}, g)
-					} else if ev.Rawcode == 122 {
+					case 122:
 						err := LoadFile(g, FileAllTimeHeatMap)
 						if err != nil {
 							return err
@@ -120,8 +128,8 @@ func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) 
 
 						Remap(k, g)
 
-						fmt.Printf("Map merged with all times.")
-					} else if ev.Rawcode == 121 {
+						//fmt.Printf("Map merged with all times.")
+					case 121:
 						err := LoadFile(g, FileAllTimeHeatMap)
 						if err != nil {
 							return err
@@ -136,21 +144,34 @@ func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) 
 
 						Remap(k, g)
 
-						fmt.Println("Map saved and new loaded.")
-					} else if ev.Rawcode == 120 {
-						g = wrapper.BasicGrid()
+						//fmt.Println("Map saved and new loaded.")
+					case 120:
+						if discarding {
+							go func() {
+								timeoutChan <- true
+							}()
+						}
 
 						Remap(k, g)
-
-						fmt.Println("Map discarded")
-					} else {
+					default:
 						Remap(k, g)
-					}
-					err := w.MakeKeyboardRequest(&g)
-					if err != nil {
-						return err
 					}
 				}
+
+				if ev.Kind == hook.KeyHold && ev.Rawcode == 120 {
+					if !discarding {
+						discarding = true
+						go func() {
+							g = discard(&discarding, g, k, m, &timeoutChan)
+						}()
+					}
+				}
+
+				err := w.MakeKeyboardRequest(&g)
+				if err != nil {
+					return err
+				}
+
 				if ev.Rawcode == 123 {
 					// Quitting
 					systray.Quit()
@@ -172,6 +193,25 @@ func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) 
 			return w.Close()
 		}
 	}
+}
+
+func discard(discarding *bool, g *effect.KeyboardGrid, k Key, m *sync.Mutex, timeoutChan *chan bool) *effect.KeyboardGrid {
+	*timeoutChan = make(chan bool)
+
+	select {
+	case <-*timeoutChan:
+		break
+	case <-time.After(3 * time.Second):
+		m.Lock()
+		g = wrapper.BasicGrid()
+		Remap(k, g)
+		m.Unlock()
+		break
+	}
+	m.Lock()
+	*discarding = false
+	m.Unlock()
+	return g
 }
 
 func LoadFile(e *effect.KeyboardGrid, file string) error {
