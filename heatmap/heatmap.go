@@ -2,11 +2,14 @@ package heatmap
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/getlantern/systray"
+	"github.com/getlantern/systray/example/icon"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
 	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 	hook "github.com/robotn/gohook"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -14,9 +17,9 @@ import (
 	"time"
 )
 
-const FileAllTimeHeatMap = "./AllTimejson"
+const FileAllTimeHeatMap = "./AllTime.json"
 
-type Key struct {
+type key struct {
 	X int64
 	Y int64
 }
@@ -30,45 +33,72 @@ FFFF00
 0000FF
 */
 
-func Remap(k Key, grid *effect.KeyboardGrid) {
-	grid.MapCount[k.X][k.Y]++
-	if grid.MaxKeyPresses < grid.MapCount[k.X][k.Y] {
-		grid.MaxKeyPresses = grid.MapCount[k.X][k.Y]
+type heatmap struct {
+	sync.Mutex
+	isKeyHeld   bool
+	timeoutChan chan bool
+	grid        *effect.KeyboardGrid
+	evChan      chan hook.Event
+	wrapper     *wrapper.Wrapper
+}
+
+func New(w *wrapper.Wrapper) (*heatmap, error) {
+	h := &heatmap{}
+	h.grid = effect.BasicGrid()
+	err := w.MakeKeyboardRequest(h.grid)
+	if err != nil {
+		return nil, err
 	}
-	for x, _ := range grid.Param {
-		for y, _ := range grid.Param[x] {
-			switch grid.MapCount[x][y] {
+	h.evChan = hook.Start()
+	h.wrapper = w
+	go h.startTray()
+	return h, nil
+}
+
+func (h *heatmap) Close() {
+	fmt.Println("hook killed")
+	defer hook.End()
+}
+
+func (h *heatmap) remap(k key) {
+	h.grid.MapCount[k.X][k.Y]++
+	if h.grid.MaxKeyPresses < h.grid.MapCount[k.X][k.Y] {
+		h.grid.MaxKeyPresses = h.grid.MapCount[k.X][k.Y]
+	}
+	for x, _ := range h.grid.Param {
+		for y, _ := range h.grid.Param[x] {
+			switch h.grid.MapCount[x][y] {
 			case 0:
-				grid.Param[x][y] = 0xFF0000
-			case grid.MaxKeyPresses:
-				grid.Param[x][y] = 0x0000FF
+				h.grid.Param[x][y] = 0xFF0000
+			case h.grid.MaxKeyPresses:
+				h.grid.Param[x][y] = 0x0000FF
 			default:
-				percentage := float64(grid.MapCount[x][y]) / float64(grid.MaxKeyPresses) * float64(len(grid.ColorMap))
-				if int64(percentage) < int64(len(grid.ColorMap)) {
-					grid.Param[x][y] = grid.ColorMap[int64(percentage)]
+				percentage := float64(h.grid.MapCount[x][y]) / float64(h.grid.MaxKeyPresses) * float64(len(h.grid.ColorMap))
+				if int64(percentage) < int64(len(h.grid.ColorMap)) {
+					h.grid.Param[x][y] = h.grid.ColorMap[int64(percentage)]
 				} else {
-					grid.Param[x][y] = 0x0000FF
+					h.grid.Param[x][y] = 0x0000FF
 				}
 			}
 		}
 	}
 }
 
-func SaveMap(e *effect.KeyboardGrid) error {
+func (h *heatmap) saveMap() error {
 	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
-		return save(e, FileAllTimeHeatMap)
+		return h.save(FileAllTimeHeatMap)
 	} else {
-		err = LoadFile(e, FileAllTimeHeatMap)
+		err = h.loadFile(FileAllTimeHeatMap)
 		if err != nil {
 			return err
 		}
 
-		return save(e, FileAllTimeHeatMap)
+		return h.save(FileAllTimeHeatMap)
 	}
 }
 
-func save(e *effect.KeyboardGrid, file string) error {
-	j, err := json.Marshal(e.MapCount)
+func (h *heatmap) save(file string) error {
+	j, err := json.Marshal(h.grid.MapCount)
 	if err != nil {
 		return err
 	}
@@ -79,19 +109,19 @@ func save(e *effect.KeyboardGrid, file string) error {
 	return nil
 }
 
-func mergeHeatmaps(receiver *effect.KeyboardGrid, donor *effect.KeyboardGrid) {
-	for x, _ := range receiver.MapCount {
-		for y, _ := range receiver.MapCount[x] {
-			receiver.MapCount[x][y] += donor.MapCount[x][y]
-			if receiver.MapCount[x][y] > receiver.MaxKeyPresses {
-				receiver.MaxKeyPresses = receiver.MapCount[x][y]
+func (h *heatmap) mergeHeatmaps(donor *effect.KeyboardGrid) {
+	for x, _ := range h.grid.MapCount {
+		for y, _ := range h.grid.MapCount[x] {
+			h.grid.MapCount[x][y] += donor.MapCount[x][y]
+			if h.grid.MapCount[x][y] > h.grid.MaxKeyPresses {
+				h.grid.MaxKeyPresses = h.grid.MapCount[x][y]
 			}
 		}
 	}
 }
 
-func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) error {
-	h := newMap()
+func (h *heatmap) Listen() error {
+	m := newMap()
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc,
@@ -100,74 +130,69 @@ func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) 
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 
-	discarding := false
-	timeoutChan := make(chan bool)
-
-	m := &sync.Mutex{}
+	h.timeoutChan = make(chan bool)
 
 	for {
 		select {
-		case ev := <-evChan:
-			if k, check := h[ev.Rawcode]; check {
+		case ev := <-h.evChan:
+			if k, check := m[ev.Rawcode]; check {
 				if ev.Kind == hook.KeyUp {
 					switch ev.Rawcode {
 					case 13:
-						Remap(Key{
+						h.remap(key{
 							X: 3,
 							Y: 14,
-						}, g)
-						Remap(Key{
+						})
+						h.remap(key{
 							X: 4,
 							Y: 21,
-						}, g)
+						})
 					case 122:
-						err := LoadFile(g, FileAllTimeHeatMap)
+						err := h.loadFile(FileAllTimeHeatMap)
 						if err != nil {
 							return err
 						}
 
-						Remap(k, g)
+						h.remap(k)
 
 						//fmt.Printf("Map merged with all times.")
 					case 121:
-						err := LoadFile(g, FileAllTimeHeatMap)
+						err := h.loadFile(FileAllTimeHeatMap)
 						if err != nil {
 							return err
 						}
 
-						err = SaveMap(g)
+						err = h.saveMap()
 						if err != nil {
 							return err
 						}
 
-						g = wrapper.BasicGrid()
+						h.grid = effect.BasicGrid()
 
-						Remap(k, g)
+						h.remap(k)
 
 						//fmt.Println("Map saved and new loaded.")
 					case 120:
-						if discarding {
+						if h.isKeyHeld {
 							go func() {
-								timeoutChan <- true
+								h.timeoutChan <- true
 							}()
 						}
 
-						Remap(k, g)
+						h.remap(k)
 					default:
-						Remap(k, g)
+						h.remap(k)
 					}
 				}
 
 				if ev.Kind == hook.KeyHold && ev.Rawcode == 120 {
-					if !discarding {
-						discarding = true
-						go func() {
-							g = discard(&discarding, g, k, m, &timeoutChan)
-						}()
+					if !h.isKeyHeld {
+						h.isKeyHeld = true
+						go h.discard(k)
 					}
 				}
 
-				err := w.MakeKeyboardRequest(&g)
+				err := h.wrapper.MakeKeyboardRequest(&h.grid)
 				if err != nil {
 					return err
 				}
@@ -185,36 +210,32 @@ func Listen(evChan chan hook.Event, g *effect.KeyboardGrid, w *wrapper.Wrapper) 
 				}
 			}
 		case <-sigc:
-			err := SaveMap(g)
+			err := h.saveMap()
 			if err != nil {
 				return err
 			}
-
-			return w.Close()
 		}
 	}
 }
 
-func discard(discarding *bool, g *effect.KeyboardGrid, k Key, m *sync.Mutex, timeoutChan *chan bool) *effect.KeyboardGrid {
-	*timeoutChan = make(chan bool)
-
+func (h *heatmap) discard(k key) {
 	select {
-	case <-*timeoutChan:
+	case <-h.timeoutChan:
 		break
 	case <-time.After(3 * time.Second):
-		m.Lock()
-		g = wrapper.BasicGrid()
-		Remap(k, g)
-		m.Unlock()
+		h.Lock()
+		h.grid = effect.BasicGrid()
+		h.remap(k)
+		h.Unlock()
+		fmt.Println("reset")
 		break
 	}
-	m.Lock()
-	*discarding = false
-	m.Unlock()
-	return g
+	h.Lock()
+	h.isKeyHeld = false
+	h.Unlock()
 }
 
-func LoadFile(e *effect.KeyboardGrid, file string) error {
+func (h *heatmap) loadFile(file string) error {
 	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
 		return nil
 	} else {
@@ -230,472 +251,524 @@ func LoadFile(e *effect.KeyboardGrid, file string) error {
 			return err
 		}
 
-		mergeHeatmaps(e, g)
+		h.mergeHeatmaps(g)
 
 		return os.Remove(file)
 	}
 }
 
-func HeatUp(k Key, grid *effect.KeyboardGrid) {
-	if grid.Param[k.X][k.Y] > 0x0000FF {
-		grid.Param[k.X][k.Y] = grid.ColorMap[grid.MapCount[k.X][k.Y]]
-		grid.MapCount[k.X][k.Y]++
+//func (h *heatmap) HeatUp(k key) {
+//	if h.grid.Param[k.X][k.Y] > 0x0000FF {
+//		h.grid.Param[k.X][k.Y] = h.grid.ColorMap[h.grid.MapCount[k.X][k.Y]]
+//		h.grid.MapCount[k.X][k.Y]++
 
-		// So sad that I don't want this q.Q
-		//switch {
-		//case grid.Param[k.X][k.Y]&0xFF0000 == 0xFF0000 && grid.Param[k.X][k.Y] != 0xFFFF00: //	From blue to blue/green
-		//	fmt.Println("more green")
-		//	grid.Param[k.X][k.Y] += 0x000100
-		//case (grid.Param[k.X][k.Y]&0x00FF00 == 0x00FF00 || grid.Param[k.X][k.Y] == 0xFFFF00) && grid.Param[k.X][k.Y] > 0x00FFFF: // From blue/green to green
-		//	fmt.Println("less blue")
-		//	grid.Param[k.X][k.Y] -= 0x010000
-		//case (grid.Param[k.X][k.Y] < 0x00FFFF || grid.Param[k.X][k.Y] == 0x00FF00) && grid.Param[k.X][k.Y]&0x0000FF != 0x0000FF: //	From green to green/red
-		//	fmt.Println("more red")
-		//	grid.Param[k.X][k.Y] += 0x000001
-		//case grid.Param[k.X][k.Y] <= 0x0FFFF && grid.Param[k.X][k.Y] > 0x0000FF: //	From green/red to red
-		//	fmt.Println("less green")
-		//	grid.Param[k.X][k.Y] -= 0x000100
-		//}
+// So sad that I don't want this q.Q
+//switch {
+//case grid.Param[k.X][k.Y]&0xFF0000 == 0xFF0000 && grid.Param[k.X][k.Y] != 0xFFFF00: //	From blue to blue/green
+//	fmt.Println("more green")
+//	grid.Param[k.X][k.Y] += 0x000100
+//case (grid.Param[k.X][k.Y]&0x00FF00 == 0x00FF00 || grid.Param[k.X][k.Y] == 0xFFFF00) && grid.Param[k.X][k.Y] > 0x00FFFF: // From blue/green to green
+//	fmt.Println("less blue")
+//	grid.Param[k.X][k.Y] -= 0x010000
+//case (grid.Param[k.X][k.Y] < 0x00FFFF || grid.Param[k.X][k.Y] == 0x00FF00) && grid.Param[k.X][k.Y]&0x0000FF != 0x0000FF: //	From green to green/red
+//	fmt.Println("more red")
+//	grid.Param[k.X][k.Y] += 0x000001
+//case grid.Param[k.X][k.Y] <= 0x0FFFF && grid.Param[k.X][k.Y] > 0x0000FF: //	From green/red to red
+//	fmt.Println("less green")
+//	grid.Param[k.X][k.Y] -= 0x000100
+//}
+//	}
+//}
+
+func (h *heatmap) startTray() {
+	systray.Run(h.onReady(), h.onExit())
+}
+
+func (h *heatmap) onReady() func() {
+	return func() {
+		systray.SetIcon(icon.Data)
+		systray.SetTitle("Chroma heatmap")
+		systray.SetTooltip("Chroma heatmap")
+
+		mDiscard := systray.AddMenuItem("Discard	F9  ", "Discard current and start new")
+		mSaveAndNew := systray.AddMenuItem("Save and new	F10", "Save into all time and start new heatmap")
+		mMergeAndLoad := systray.AddMenuItem("Load all time	F11", "Load all time heatmap and merge to current")
+		mQuit := systray.AddMenuItem("Quit	F12", "Quit the whole app")
+
+		for {
+			select {
+			case <-mQuit.ClickedCh:
+				systray.Quit()
+			case <-mMergeAndLoad.ClickedCh:
+				h.evChan <- hook.Event{
+					Kind:    hook.KeyUp,
+					Rawcode: 122,
+				}
+			case <-mSaveAndNew.ClickedCh:
+				h.evChan <- hook.Event{
+					Kind:    hook.KeyUp,
+					Rawcode: 121,
+				}
+			case <-mDiscard.ClickedCh:
+				h.evChan <- hook.Event{
+					Kind:    hook.KeyUp,
+					Rawcode: 120,
+				}
+			}
+		}
 	}
 }
 
-func newMap() map[uint16]Key {
-	m := make(map[uint16]Key)
+func (h *heatmap) onExit() func() {
+	return func() {
+		err := h.saveMap()
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	m[27] = Key{
+		h.evChan <- hook.Event{
+			Kind: hook.KeyUp,
+		}
+	}
+}
+
+func newMap() map[uint16]key {
+	m := make(map[uint16]key)
+
+	m[27] = key{
 		X: 0,
 		Y: 1,
 	}
-	m[192] = Key{
+	m[192] = key{
 		X: 1,
 		Y: 1,
 	}
-	m[9] = Key{
+	m[9] = key{
 		X: 2,
 		Y: 1,
 	}
-	m[20] = Key{
+	m[20] = key{
 		X: 3,
 		Y: 1,
 	}
-	m[160] = Key{
+	m[160] = key{
 		X: 4,
 		Y: 1,
 	}
-	m[162] = Key{
+	m[162] = key{
 		X: 5,
 		Y: 1,
 	}
 
-	m[49] = Key{
+	m[49] = key{
 		X: 1,
 		Y: 2,
 	}
-	m[81] = Key{
+	m[81] = key{
 
 		X: 2,
 		Y: 2,
 	}
-	m[65] = Key{
+	m[65] = key{
 		X: 3,
 		Y: 2,
 	}
-	m[226] = Key{
+	m[226] = key{
 		X: 4,
 		Y: 2,
 	}
-	m[91] = Key{
+	m[91] = key{
 		X: 5,
 		Y: 2,
 	}
 
-	m[112] = Key{
+	m[112] = key{
 		X: 0,
 		Y: 3,
 	}
-	m[50] = Key{
+	m[50] = key{
 		X: 1,
 		Y: 3,
 	}
-	m[87] = Key{
+	m[87] = key{
 		X: 2,
 		Y: 3,
 	}
-	m[83] = Key{
+	m[83] = key{
 		X: 3,
 		Y: 3,
 	}
-	m[90] = Key{
+	m[90] = key{
 		X: 4,
 		Y: 3,
 	}
-	m[164] = Key{
+	m[164] = key{
 		X: 5,
 		Y: 3,
 	}
 
-	m[113] = Key{
+	m[113] = key{
 		X: 0,
 		Y: 4,
 	}
-	m[51] = Key{
+	m[51] = key{
 		X: 1,
 		Y: 4,
 	}
-	m[69] = Key{
+	m[69] = key{
 		X: 2,
 		Y: 4,
 	}
-	m[68] = Key{
+	m[68] = key{
 		X: 3,
 		Y: 4,
 	}
-	m[88] = Key{
+	m[88] = key{
 		X: 4,
 		Y: 4,
 	}
 
-	m[114] = Key{
+	m[114] = key{
 		X: 0,
 		Y: 5,
 	}
-	m[52] = Key{
+	m[52] = key{
 		X: 1,
 		Y: 5,
 	}
-	m[82] = Key{
+	m[82] = key{
 		X: 2,
 		Y: 5,
 	}
-	m[70] = Key{
+	m[70] = key{
 		X: 3,
 		Y: 5,
 	}
-	m[67] = Key{
+	m[67] = key{
 		X: 4,
 		Y: 5,
 	}
 
-	m[115] = Key{
+	m[115] = key{
 		X: 0,
 		Y: 6,
 	}
-	m[53] = Key{
+	m[53] = key{
 		X: 1,
 		Y: 6,
 	}
-	m[84] = Key{
+	m[84] = key{
 		X: 2,
 		Y: 6,
 	}
-	m[71] = Key{
+	m[71] = key{
 		X: 3,
 		Y: 6,
 	}
-	m[86] = Key{
+	m[86] = key{
 		X: 4,
 		Y: 6,
 	}
 
-	m[116] = Key{
+	m[116] = key{
 		X: 0,
 		Y: 7,
 	}
-	m[54] = Key{
+	m[54] = key{
 		X: 1,
 		Y: 7,
 	}
-	m[89] = Key{
+	m[89] = key{
 		X: 2,
 		Y: 7,
 	}
-	m[72] = Key{
+	m[72] = key{
 		X: 3,
 		Y: 7,
 	}
-	m[66] = Key{
+	m[66] = key{
 		X: 4,
 		Y: 7,
 	}
-	m[32] = Key{
+	m[32] = key{
 		X: 5,
 		Y: 7,
 	}
 
-	m[117] = Key{
+	m[117] = key{
 		X: 0,
 		Y: 8,
 	}
-	m[55] = Key{
+	m[55] = key{
 		X: 1,
 		Y: 8,
 	}
-	m[85] = Key{
+	m[85] = key{
 		X: 2,
 		Y: 8,
 	}
-	m[74] = Key{
+	m[74] = key{
 		X: 3,
 		Y: 8,
 	}
-	m[78] = Key{
+	m[78] = key{
 		X: 4,
 		Y: 8,
 	}
 
-	m[118] = Key{
+	m[118] = key{
 		X: 0,
 		Y: 9,
 	}
-	m[56] = Key{
+	m[56] = key{
 		X: 1,
 		Y: 9,
 	}
-	m[73] = Key{
+	m[73] = key{
 		X: 2,
 		Y: 9,
 	}
-	m[75] = Key{
+	m[75] = key{
 		X: 3,
 		Y: 9,
 	}
-	m[77] = Key{
+	m[77] = key{
 		X: 4,
 		Y: 9,
 	}
 
-	m[119] = Key{
+	m[119] = key{
 		X: 0,
 		Y: 10,
 	}
-	m[57] = Key{
+	m[57] = key{
 		X: 1,
 		Y: 10,
 	}
-	m[79] = Key{
+	m[79] = key{
 		X: 2,
 		Y: 10,
 	}
-	m[76] = Key{
+	m[76] = key{
 		X: 3,
 		Y: 10,
 	}
-	m[188] = Key{
+	m[188] = key{
 		X: 4,
 		Y: 10,
 	}
 
-	m[120] = Key{
+	m[120] = key{
 		X: 0,
 		Y: 11,
 	}
-	m[48] = Key{
+	m[48] = key{
 		X: 1,
 		Y: 11,
 	}
-	m[80] = Key{
+	m[80] = key{
 		X: 2,
 		Y: 11,
 	}
-	m[186] = Key{
+	m[186] = key{
 		X: 3,
 		Y: 11,
 	}
-	m[190] = Key{
+	m[190] = key{
 		X: 4,
 		Y: 11,
 	}
-	m[165] = Key{
+	m[165] = key{
 		X: 5,
 		Y: 11,
 	}
 
-	m[121] = Key{
+	m[121] = key{
 		X: 0,
 		Y: 12,
 	}
-	m[189] = Key{
+	m[189] = key{
 		X: 1,
 		Y: 12,
 	}
-	m[219] = Key{
+	m[219] = key{
 		X: 2,
 		Y: 12,
 	}
-	m[222] = Key{
+	m[222] = key{
 		X: 3,
 		Y: 12,
 	}
-	m[191] = Key{
+	m[191] = key{
 		X: 4,
 		Y: 12,
 	}
 
-	m[122] = Key{
+	m[122] = key{
 		X: 0,
 		Y: 13,
 	}
-	m[187] = Key{
+	m[187] = key{
 		X: 1,
 		Y: 13,
 	}
-	m[221] = Key{
+	m[221] = key{
 		X: 2,
 		Y: 13,
 	}
-	m[220] = Key{
+	m[220] = key{
 		X: 3,
 		Y: 13,
 	}
-	m[93] = Key{
+	m[93] = key{
 		X: 5,
 		Y: 13,
 	}
 
-	m[123] = Key{
+	m[123] = key{
 		X: 0,
 		Y: 14,
 	}
-	m[8] = Key{
+	m[8] = key{
 		X: 1,
 		Y: 14,
 	}
-	m[13] = Key{
+	m[13] = key{
 		X: 3,
 		Y: 14,
 	}
-	m[161] = Key{
+	m[161] = key{
 		X: 4,
 		Y: 14,
 	}
-	m[163] = Key{
+	m[163] = key{
 		X: 5,
 		Y: 14,
 	}
 
-	m[44] = Key{
+	m[44] = key{
 		X: 0,
 		Y: 15,
 	}
-	m[45] = Key{
+	m[45] = key{
 		X: 1,
 		Y: 15,
 	}
-	m[46] = Key{
+	m[46] = key{
 		X: 2,
 		Y: 15,
 	}
-	m[37] = Key{
+	m[37] = key{
 		X: 5,
 		Y: 15,
 	}
 
-	m[145] = Key{
+	m[145] = key{
 		X: 0,
 		Y: 16,
 	}
-	m[36] = Key{
+	m[36] = key{
 		X: 1,
 		Y: 16,
 	}
-	m[35] = Key{
+	m[35] = key{
 		X: 2,
 		Y: 16,
 	}
-	m[38] = Key{
+	m[38] = key{
 		X: 4,
 		Y: 16,
 	}
-	m[40] = Key{
+	m[40] = key{
 		X: 5,
 		Y: 16,
 	}
 
-	m[19] = Key{
+	m[19] = key{
 		X: 0,
 		Y: 17,
 	}
-	m[33] = Key{
+	m[33] = key{
 		X: 1,
 		Y: 17,
 	}
-	m[34] = Key{
+	m[34] = key{
 		X: 2,
 		Y: 17,
 	}
-	m[39] = Key{
+	m[39] = key{
 		X: 5,
 		Y: 17,
 	}
 
-	m[144] = Key{
+	m[144] = key{
 		X: 1,
 		Y: 18,
 	}
-	m[103] = Key{
+	m[103] = key{
 		X: 2,
 		Y: 18,
 	}
-	m[100] = Key{
+	m[100] = key{
 		X: 3,
 		Y: 18,
 	}
-	m[97] = Key{
+	m[97] = key{
 		X: 4,
 		Y: 18,
 	}
 
-	m[111] = Key{
+	m[111] = key{
 		X: 1,
 		Y: 19,
 	}
-	m[104] = Key{
+	m[104] = key{
 		X: 2,
 		Y: 19,
 	}
-	m[101] = Key{
+	m[101] = key{
 		X: 3,
 		Y: 19,
 	}
-	m[98] = Key{
+	m[98] = key{
 		X: 4,
 		Y: 19,
 	}
-	m[96] = Key{
+	m[96] = key{
 		X: 5,
 		Y: 19,
 	}
 
-	m[106] = Key{
+	m[106] = key{
 		X: 1,
 		Y: 20,
 	}
-	m[105] = Key{
+	m[105] = key{
 		X: 2,
 		Y: 20,
 	}
-	m[102] = Key{
+	m[102] = key{
 		X: 3,
 		Y: 20,
 	}
-	m[99] = Key{
+	m[99] = key{
 		X: 4,
 		Y: 20,
 	}
-	m[110] = Key{
+	m[110] = key{
 		X: 5,
 		Y: 20,
 	}
 
-	m[109] = Key{
+	m[109] = key{
 		X: 1,
 		Y: 21,
 	}
-	m[107] = Key{
+	m[107] = key{
 		X: 2,
 		Y: 21,
 	}
-	m[13] = Key{
+	m[13] = key{
 		X: 4,
 		Y: 21,
 	}

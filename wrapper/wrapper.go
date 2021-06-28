@@ -57,9 +57,7 @@ type SdkResults struct {
 }
 
 const (
-	DeviceKeyboard     = "keyboard"
-	KeyboardMaxRows    = 6
-	KeyboardMaxColumns = 22
+	DeviceKeyboard = "keyboard"
 )
 
 //const DeviceMouse = "mouse"
@@ -104,11 +102,6 @@ func New(
 	go w.heartbeat()
 
 	time.Sleep(2 * time.Second)
-
-	err = w.custom()
-	if err != nil {
-		return nil, err
-	}
 
 	return w, nil
 }
@@ -279,11 +272,12 @@ func (w *Wrapper) deleteEffects() error {
 	return w.makeRequest(w.List, url, http.MethodDelete)
 }
 
-func (w *Wrapper) Close() error {
+func (w *Wrapper) Close() {
 	w.dead <- false
-	time.Sleep(2 * time.Second)
-	return w.makeRequest(nil, w.session.Uri, http.MethodDelete)
-	//err = w.deleteEffects()
+	err := w.makeRequest(nil, w.session.Uri, http.MethodDelete)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (w *Wrapper) Static() error {
@@ -350,56 +344,4 @@ func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
 
 	return err
 
-}
-
-func GetKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
-	var grid effect.KeyboardGrid
-	for i, _ := range grid.Param {
-		for y, _ := range grid.Param[i] {
-			grid.Param[i][y] = 0xFF0000
-		}
-	}
-	return grid.Param
-}
-
-func (w *Wrapper) custom() error {
-	e := &effect.KeyboardGrid{
-		Effect: effect.Custom,
-		Param:  GetKeyboardStruct(),
-	}
-	return w.MakeKeyboardRequest(e)
-}
-
-func BasicGrid() *effect.KeyboardGrid {
-	e := &effect.KeyboardGrid{
-		Effect: effect.Custom,
-		Param:  GetKeyboardStruct(),
-	}
-
-	setColorMap(e)
-
-	return e
-}
-
-func setColorMap(e *effect.KeyboardGrid) {
-	var color int64 = 0xFF0000
-	for i := 0; i < 255; i++ {
-		color += 0x000100
-		e.ColorMap[i] = color
-	}
-	color = 0xFFFF00
-	for i := 255; i < 510; i++ {
-		color -= 0x010000
-		e.ColorMap[i] = color
-	}
-	color = 0x00FF00
-	for i := 510; i < 765; i++ {
-		color += 0x000001
-		e.ColorMap[i] = color
-	}
-	color = 0x00FFFF
-	for i := 765; i < 1021; i++ {
-		color -= 0x000100
-		e.ColorMap[i] = color
-	}
 }

@@ -9,7 +9,7 @@ import (
 
 func TestHeatUp(t *testing.T) {
 	g := wrapper.BasicGrid()
-	k := Key{
+	k := key{
 		X: 0,
 		Y: 0,
 	}
@@ -35,22 +35,22 @@ func TestHeatUp(t *testing.T) {
 
 func TestRemap(t *testing.T) {
 	e := &effect.KeyboardGrid{}
-	Remap(Key{}, e)
+	Remap(key{}, e)
 }
 
 func BenchmarkRemap(b *testing.B) {
 	e := &effect.KeyboardGrid{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		Remap(Key{
+		Remap(key{
 			X: 5,
 			Y: 5,
 		}, e)
-		Remap(Key{
+		Remap(key{
 			X: 5,
 			Y: 5,
 		}, e)
-		Remap(Key{
+		Remap(key{
 			X: 2,
 			Y: 5,
 		}, e)
