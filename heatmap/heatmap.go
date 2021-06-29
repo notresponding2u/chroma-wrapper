@@ -33,6 +33,8 @@ FFFF00
 0000FF
 */
 
+type callback func(k key) error
+
 type heatmap struct {
 	sync.Mutex
 	isKeyHeld   bool
@@ -40,6 +42,7 @@ type heatmap struct {
 	grid        *effect.KeyboardGrid
 	evChan      chan hook.Event
 	wrapper     *wrapper.Wrapper
+	sigc        chan os.Signal
 }
 
 func New(w *wrapper.Wrapper) (*heatmap, error) {
@@ -56,6 +59,10 @@ func New(w *wrapper.Wrapper) (*heatmap, error) {
 }
 
 func (h *heatmap) Close() {
+	err := h.saveMap()
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Println("hook killed")
 	defer hook.End()
 }
@@ -123,8 +130,8 @@ func (h *heatmap) mergeHeatmaps(donor *effect.KeyboardGrid) {
 func (h *heatmap) Listen() error {
 	m := newMap()
 
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc,
+	h.sigc = make(chan os.Signal, 1)
+	signal.Notify(h.sigc,
 		syscall.SIGHUP,
 		syscall.SIGINT,
 		syscall.SIGTERM,
@@ -132,12 +139,93 @@ func (h *heatmap) Listen() error {
 
 	h.timeoutChan = make(chan bool)
 
+	defer systray.Quit()
 	for {
 		select {
 		case ev := <-h.evChan:
 			if k, check := m[ev.Rawcode]; check {
 				if ev.Kind == hook.KeyUp {
+					if h.isKeyHeld {
+						go func() {
+							h.timeoutChan <- true
+						}()
+					}
+
+				}
+
+				if ev.Kind == hook.KeyHold {
 					switch ev.Rawcode {
+					case 122:
+						// Load all times
+						if !h.isKeyHeld {
+							h.isKeyHeld = true
+							go func() {
+								err := h.processCallback(func(k key) error {
+									err := h.loadFile(FileAllTimeHeatMap)
+									if err != nil {
+										return err
+									}
+									return nil
+								}, k)
+								if err != nil {
+									log.Fatal(err)
+								}
+							}()
+						}
+					case 121:
+						// Save and new
+						if !h.isKeyHeld {
+							h.isKeyHeld = true
+							go func() {
+								err := h.processCallback(func(k key) error {
+									err := h.loadFile(FileAllTimeHeatMap)
+									if err != nil {
+										return err
+									}
+
+									err = h.saveMap()
+									if err != nil {
+										return err
+									}
+
+									h.grid = effect.BasicGrid()
+									return nil
+								}, k)
+								if err != nil {
+									log.Fatal(err)
+								}
+							}()
+						}
+					case 120:
+						// Discard
+						if !h.isKeyHeld {
+							h.isKeyHeld = true
+							go func() {
+								err := h.processCallback(func(k key) error {
+									fmt.Println("into discarding")
+									h.grid = effect.BasicGrid()
+									h.remap(k)
+									return nil
+								}, k)
+								if err != nil {
+									log.Fatal(err)
+								}
+							}()
+						}
+					case 123:
+						// Quitting
+						if !h.isKeyHeld {
+							h.isKeyHeld = true
+							go func() {
+								err := h.processCallback(func(k key) error {
+									h.sigc <- syscall.SIGQUIT
+									return nil
+								}, k)
+								if err != nil {
+									log.Fatal(err)
+								}
+							}()
+						}
 					case 13:
 						h.remap(key{
 							X: 3,
@@ -147,92 +235,38 @@ func (h *heatmap) Listen() error {
 							X: 4,
 							Y: 21,
 						})
-					case 122:
-						err := h.loadFile(FileAllTimeHeatMap)
-						if err != nil {
-							return err
-						}
-
-						h.remap(k)
-
-						//fmt.Printf("Map merged with all times.")
-					case 121:
-						err := h.loadFile(FileAllTimeHeatMap)
-						if err != nil {
-							return err
-						}
-
-						err = h.saveMap()
-						if err != nil {
-							return err
-						}
-
-						h.grid = effect.BasicGrid()
-
-						h.remap(k)
-
-						//fmt.Println("Map saved and new loaded.")
-					case 120:
-						if h.isKeyHeld {
-							go func() {
-								h.timeoutChan <- true
-							}()
-						}
-
-						h.remap(k)
 					default:
 						h.remap(k)
 					}
-				}
 
-				if ev.Kind == hook.KeyHold && ev.Rawcode == 120 {
-					if !h.isKeyHeld {
-						h.isKeyHeld = true
-						go h.discard(k)
+					err := h.wrapper.MakeKeyboardRequest(&h.grid)
+					if err != nil {
+						return err
 					}
 				}
-
-				err := h.wrapper.MakeKeyboardRequest(&h.grid)
-				if err != nil {
-					return err
-				}
-
-				if ev.Rawcode == 123 {
-					// Quitting
-					systray.Quit()
-
-					return nil
-				}
-
-				if ev.Rawcode == 0 {
-					// Quitting
-					return nil
-				}
 			}
-		case <-sigc:
-			err := h.saveMap()
-			if err != nil {
-				return err
-			}
+		case <-h.sigc:
+			return nil
 		}
 	}
 }
 
-func (h *heatmap) discard(k key) {
+func (h *heatmap) processCallback(f callback, k key) error {
+	var err error
 	select {
 	case <-h.timeoutChan:
 		break
 	case <-time.After(3 * time.Second):
 		h.Lock()
-		h.grid = effect.BasicGrid()
-		h.remap(k)
+		err = f(k)
 		h.Unlock()
-		fmt.Println("reset")
 		break
 	}
 	h.Lock()
 	h.isKeyHeld = false
 	h.Unlock()
+
+	return err
 }
 
 func (h *heatmap) loadFile(file string) error {
@@ -298,20 +332,21 @@ func (h *heatmap) onReady() func() {
 		for {
 			select {
 			case <-mQuit.ClickedCh:
-				systray.Quit()
+				h.sigc <- syscall.SIGQUIT
 			case <-mMergeAndLoad.ClickedCh:
 				h.evChan <- hook.Event{
-					Kind:    hook.KeyUp,
+					Kind:    hook.KeyHold,
 					Rawcode: 122,
 				}
 			case <-mSaveAndNew.ClickedCh:
 				h.evChan <- hook.Event{
-					Kind:    hook.KeyUp,
+					Kind:    hook.KeyHold,
 					Rawcode: 121,
 				}
 			case <-mDiscard.ClickedCh:
+				fmt.Println("discarding")
 				h.evChan <- hook.Event{
-					Kind:    hook.KeyUp,
+					Kind:    hook.KeyHold,
 					Rawcode: 120,
 				}
 			}
@@ -326,9 +361,7 @@ func (h *heatmap) onExit() func() {
 			log.Fatal(err)
 		}
 
-		h.evChan <- hook.Event{
-			Kind: hook.KeyUp,
-		}
+		h.sigc <- syscall.SIGQUIT
 	}
 }
 
