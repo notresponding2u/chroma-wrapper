@@ -2,7 +2,6 @@ package heatmap
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/getlantern/systray"
 	"github.com/getlantern/systray/example/icon"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
@@ -63,7 +62,6 @@ func (h *heatmap) Close() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("hook killed")
 	defer hook.End()
 }
 
@@ -202,7 +200,6 @@ func (h *heatmap) Listen() error {
 							h.isKeyHeld = true
 							go func() {
 								err := h.processCallback(func(k key) error {
-									fmt.Println("into discarding")
 									h.grid = effect.BasicGrid()
 									h.remap(k)
 									return nil
@@ -344,7 +341,6 @@ func (h *heatmap) onReady() func() {
 					Rawcode: 121,
 				}
 			case <-mDiscard.ClickedCh:
-				fmt.Println("discarding")
 				h.evChan <- hook.Event{
 					Kind:    hook.KeyHold,
 					Rawcode: 120,
