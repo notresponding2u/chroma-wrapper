@@ -178,12 +178,7 @@ func (h *heatmap) Listen() error {
 							h.isKeyHeld = true
 							go func() {
 								err := h.processCallback(func(k key) error {
-									err := h.loadFile(FileAllTimeHeatMap)
-									if err != nil {
-										return err
-									}
-
-									err = h.saveMap()
+									err := h.saveMap()
 									if err != nil {
 										return err
 									}
