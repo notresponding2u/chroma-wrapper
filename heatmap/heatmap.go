@@ -2,6 +2,7 @@ package heatmap
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/getlantern/systray"
 	"github.com/getlantern/systray/example/icon"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
@@ -69,6 +70,7 @@ func (h *heatmap) remap(k key) {
 	h.grid.MapCount[k.X][k.Y]++
 	if h.grid.MaxKeyPresses < h.grid.MapCount[k.X][k.Y] {
 		h.grid.MaxKeyPresses = h.grid.MapCount[k.X][k.Y]
+		systray.SetTooltip(fmt.Sprintf("Max count %d", h.grid.MaxKeyPresses))
 	}
 	for x, _ := range h.grid.Param {
 		for y, _ := range h.grid.Param[x] {
