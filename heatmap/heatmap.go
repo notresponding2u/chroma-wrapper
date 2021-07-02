@@ -139,103 +139,131 @@ func (h *heatmap) Listen() error {
 
 	h.timeoutChan = make(chan bool)
 
+	var lastEvent uint16
+	var lastEventKind uint8
+
 	defer systray.Quit()
 	for {
 		select {
 		case ev := <-h.evChan:
 			if k, check := m[ev.Rawcode]; check {
-				if ev.Kind == hook.KeyUp {
-					if h.isKeyHeld {
-						go func() {
-							h.timeoutChan <- true
-						}()
+				if (ev.Kind == hook.KeyHold || ev.Kind == hook.KeyUp) && (lastEvent != ev.Rawcode || lastEventKind != ev.Kind) {
+					lastEvent = ev.Rawcode
+					lastEventKind = ev.Kind
+
+					if ev.Kind == hook.KeyUp {
+						if h.isKeyHeld {
+							go func() {
+								h.timeoutChan <- true
+							}()
+						}
+
 					}
 
-				}
-
-				if ev.Kind == hook.KeyHold {
-					switch ev.Rawcode {
-					case 122:
-						// Load all times
-						if !h.isKeyHeld {
-							h.isKeyHeld = true
-							go func() {
-								err := h.processCallback(func(k key) error {
-									err := h.loadFile(FileAllTimeHeatMap)
+					if ev.Kind == hook.KeyHold {
+						switch ev.Rawcode {
+						case 122:
+							// Load all times
+							if !h.isKeyHeld {
+								h.isKeyHeld = true
+								go func() {
+									err := h.processCallback(func(k key) error {
+										err := h.loadFile(FileAllTimeHeatMap)
+										if err != nil {
+											return err
+										}
+										return nil
+									}, k)
 									if err != nil {
-										return err
+										log.Fatal(err)
 									}
-									return nil
-								}, k)
+								}()
+
+								err := h.wrapper.MakeKeyboardRequest(&h.grid)
 								if err != nil {
-									log.Fatal(err)
+									return err
 								}
-							}()
-						}
-					case 121:
-						// Save and new
-						if !h.isKeyHeld {
-							h.isKeyHeld = true
-							go func() {
-								err := h.processCallback(func(k key) error {
-									err := h.saveMap()
+							}
+						case 121:
+							// Save and new
+							if !h.isKeyHeld {
+								h.isKeyHeld = true
+								go func() {
+									err := h.processCallback(func(k key) error {
+										err := h.saveMap()
+										if err != nil {
+											return err
+										}
+
+										h.grid = effect.BasicGrid()
+										return nil
+									}, k)
 									if err != nil {
-										return err
+										log.Fatal(err)
 									}
+								}()
 
-									h.grid = effect.BasicGrid()
-									return nil
-								}, k)
+								err := h.wrapper.MakeKeyboardRequest(&h.grid)
 								if err != nil {
-									log.Fatal(err)
+									return err
 								}
-							}()
-						}
-					case 120:
-						// Discard
-						if !h.isKeyHeld {
-							h.isKeyHeld = true
-							go func() {
-								err := h.processCallback(func(k key) error {
-									h.grid = effect.BasicGrid()
-									h.remap(k)
-									return nil
-								}, k)
-								if err != nil {
-									log.Fatal(err)
-								}
-							}()
-						}
-					case 123:
-						// Quitting
-						if !h.isKeyHeld {
-							h.isKeyHeld = true
-							go func() {
-								err := h.processCallback(func(k key) error {
-									h.sigc <- syscall.SIGQUIT
-									return nil
-								}, k)
-								if err != nil {
-									log.Fatal(err)
-								}
-							}()
-						}
-					case 13:
-						h.remap(key{
-							X: 3,
-							Y: 14,
-						})
-						h.remap(key{
-							X: 4,
-							Y: 21,
-						})
-					default:
-						h.remap(k)
-					}
+							}
+						case 120:
+							// Discard
+							if !h.isKeyHeld {
+								h.isKeyHeld = true
+								go func() {
+									err := h.processCallback(func(k key) error {
+										h.grid = effect.BasicGrid()
+										h.remap(k)
+										return nil
+									}, k)
+									if err != nil {
+										log.Fatal(err)
+									}
+								}()
 
-					err := h.wrapper.MakeKeyboardRequest(&h.grid)
-					if err != nil {
-						return err
+								err := h.wrapper.MakeKeyboardRequest(&h.grid)
+								if err != nil {
+									return err
+								}
+							}
+						case 123:
+							// Quitting
+							if !h.isKeyHeld {
+								h.isKeyHeld = true
+								go func() {
+									err := h.processCallback(func(k key) error {
+										h.sigc <- syscall.SIGQUIT
+										return nil
+									}, k)
+									if err != nil {
+										log.Fatal(err)
+									}
+								}()
+							}
+						case 13:
+							h.remap(key{
+								X: 3,
+								Y: 14,
+							})
+							h.remap(key{
+								X: 4,
+								Y: 21,
+							})
+
+							err := h.wrapper.MakeKeyboardRequest(&h.grid)
+							if err != nil {
+								return err
+							}
+						default:
+							h.remap(k)
+
+							err := h.wrapper.MakeKeyboardRequest(&h.grid)
+							if err != nil {
+								return err
+							}
+						}
 					}
 				}
 			}
@@ -250,10 +278,15 @@ func (h *heatmap) processCallback(f callback, k key) error {
 	select {
 	case <-h.timeoutChan:
 		break
-	case <-time.After(3 * time.Second):
+	case <-time.After(time.Second):
 		h.Lock()
 		err = f(k)
 		h.Unlock()
+		err := h.wrapper.MakeKeyboardRequest(h.grid)
+		if err != nil {
+			return err
+		}
+
 		break
 	}
 	h.Lock()
