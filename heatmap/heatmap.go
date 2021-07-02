@@ -172,6 +172,9 @@ func (h *heatmap) Listen() error {
 										if err != nil {
 											return err
 										}
+
+										h.remap(k)
+
 										return nil
 									}, k, true)
 									if err != nil {
