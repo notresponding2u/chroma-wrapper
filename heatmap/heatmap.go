@@ -173,16 +173,11 @@ func (h *heatmap) Listen() error {
 											return err
 										}
 										return nil
-									}, k)
+									}, k, true)
 									if err != nil {
 										log.Fatal(err)
 									}
 								}()
-
-								err := h.wrapper.MakeKeyboardRequest(&h.grid)
-								if err != nil {
-									return err
-								}
 							}
 						case 121:
 							// Save and new
@@ -197,16 +192,11 @@ func (h *heatmap) Listen() error {
 
 										h.grid = effect.BasicGrid()
 										return nil
-									}, k)
+									}, k, true)
 									if err != nil {
 										log.Fatal(err)
 									}
 								}()
-
-								err := h.wrapper.MakeKeyboardRequest(&h.grid)
-								if err != nil {
-									return err
-								}
 							}
 						case 120:
 							// Discard
@@ -217,16 +207,11 @@ func (h *heatmap) Listen() error {
 										h.grid = effect.BasicGrid()
 										h.remap(k)
 										return nil
-									}, k)
+									}, k, true)
 									if err != nil {
 										log.Fatal(err)
 									}
 								}()
-
-								err := h.wrapper.MakeKeyboardRequest(&h.grid)
-								if err != nil {
-									return err
-								}
 							}
 						case 123:
 							// Quitting
@@ -236,7 +221,7 @@ func (h *heatmap) Listen() error {
 									err := h.processCallback(func(k key) error {
 										h.sigc <- syscall.SIGQUIT
 										return nil
-									}, k)
+									}, k, false)
 									if err != nil {
 										log.Fatal(err)
 									}
@@ -273,7 +258,7 @@ func (h *heatmap) Listen() error {
 	}
 }
 
-func (h *heatmap) processCallback(f callback, k key) error {
+func (h *heatmap) processCallback(f callback, k key, shouldRefresh bool) error {
 	var err error
 	select {
 	case <-h.timeoutChan:
@@ -282,9 +267,11 @@ func (h *heatmap) processCallback(f callback, k key) error {
 		h.Lock()
 		err = f(k)
 		h.Unlock()
-		err := h.wrapper.MakeKeyboardRequest(h.grid)
-		if err != nil {
-			return err
+		if shouldRefresh {
+			err := h.wrapper.MakeKeyboardRequest(h.grid)
+			if err != nil {
+				return err
+			}
 		}
 
 		break
