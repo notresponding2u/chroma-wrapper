@@ -285,7 +285,7 @@ func (h *heatmap) Listen() error {
 }
 
 func (h *heatmap) setTitle(s string) {
-	h.mFakeTitle.SetTitle(fmt.Sprintf("Last action %s", s))
+	h.mFakeTitle.SetTitle(fmt.Sprintf("Last action	%s", s))
 }
 
 func (h *heatmap) processCallback(f callback, k key, shouldRefresh bool) error {
