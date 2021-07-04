@@ -371,6 +371,8 @@ func (h *heatmap) onReady() func() {
 		h.mFakeTitle = systray.AddMenuItem("Chroma heatmap", "Chroma heatmap")
 		h.mFakeTitle.Disable()
 
+		systray.AddSeparator()
+
 		mDiscard := systray.AddMenuItem("Discard	F9  ", "Discard current and start new")
 		mSaveAndNew := systray.AddMenuItem("Save and new	F10", "Save into all time and start new heatmap")
 		mMergeAndLoad := systray.AddMenuItem("Load all time	F11", "Load all time heatmap and merge to current")
