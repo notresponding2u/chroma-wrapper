@@ -17,7 +17,13 @@ import (
 	"time"
 )
 
-const FileAllTimeHeatMap = "./AllTime.json"
+const (
+	FileAllTimeHeatMap = "./AllTime.json"
+	ActionLoadAllTimes = "Load all times"
+	ActionSaveAndNew   = "Save and new"
+	ActionDiscard      = "Discard"
+	ActionQuit         = "Quilt"
+)
 
 type key struct {
 	X int64
@@ -37,12 +43,13 @@ type callback func(k key) error
 
 type heatmap struct {
 	sync.Mutex
-	isKeyHeld   bool
-	timeoutChan chan bool
-	grid        *effect.KeyboardGrid
-	evChan      chan hook.Event
-	wrapper     *wrapper.Wrapper
-	sigc        chan os.Signal
+	isControlKeyPressed bool
+	timeoutChan         chan bool
+	grid                *effect.KeyboardGrid
+	evChan              chan hook.Event
+	wrapper             *wrapper.Wrapper
+	sigc                chan os.Signal
+	mFakeTitle          *systray.MenuItem
 }
 
 func New(w *wrapper.Wrapper) (*heatmap, error) {
@@ -68,10 +75,13 @@ func (h *heatmap) Close() {
 
 func (h *heatmap) remap(k key) {
 	h.grid.MapCount[k.X][k.Y]++
+	h.grid.TotalKeyPresses++
 	if h.grid.MaxKeyPresses < h.grid.MapCount[k.X][k.Y] {
 		h.grid.MaxKeyPresses = h.grid.MapCount[k.X][k.Y]
-		systray.SetTooltip(fmt.Sprintf("Max count %d", h.grid.MaxKeyPresses))
 	}
+
+	systray.SetTooltip(fmt.Sprintf("Max count single key %d\nMax count total %d", h.grid.MaxKeyPresses, h.grid.TotalKeyPresses))
+
 	for x, _ := range h.grid.Param {
 		for y, _ := range h.grid.Param[x] {
 			switch h.grid.MapCount[x][y] {
@@ -152,7 +162,8 @@ func (h *heatmap) Listen() error {
 					lastEventKind = ev.Kind
 
 					if ev.Kind == hook.KeyUp {
-						if h.isKeyHeld {
+						// Special functions have to be triggered to use isControlKeyPressed
+						if h.isControlKeyPressed {
 							go func() {
 								h.timeoutChan <- true
 							}()
@@ -164,8 +175,8 @@ func (h *heatmap) Listen() error {
 						switch ev.Rawcode {
 						case 122:
 							// Load all times
-							if !h.isKeyHeld {
-								h.isKeyHeld = true
+							if !h.isControlKeyPressed {
+								h.isControlKeyPressed = true
 								go func() {
 									err := h.processCallback(func(k key) error {
 										err := h.loadFile(FileAllTimeHeatMap)
@@ -174,6 +185,8 @@ func (h *heatmap) Listen() error {
 										}
 
 										h.remap(k)
+
+										h.mFakeTitle.SetTitle(ActionLoadAllTimes)
 
 										return nil
 									}, k, true)
@@ -184,8 +197,8 @@ func (h *heatmap) Listen() error {
 							}
 						case 121:
 							// Save and new
-							if !h.isKeyHeld {
-								h.isKeyHeld = true
+							if !h.isControlKeyPressed {
+								h.isControlKeyPressed = true
 								go func() {
 									err := h.processCallback(func(k key) error {
 										err := h.saveMap()
@@ -194,6 +207,9 @@ func (h *heatmap) Listen() error {
 										}
 
 										h.grid = effect.BasicGrid()
+
+										h.setTitle(ActionSaveAndNew)
+
 										return nil
 									}, k, true)
 									if err != nil {
@@ -203,12 +219,16 @@ func (h *heatmap) Listen() error {
 							}
 						case 120:
 							// Discard
-							if !h.isKeyHeld {
-								h.isKeyHeld = true
+							if !h.isControlKeyPressed {
+								h.isControlKeyPressed = true
+
 								go func() {
 									err := h.processCallback(func(k key) error {
 										h.grid = effect.BasicGrid()
 										h.remap(k)
+
+										h.setTitle(ActionDiscard)
+
 										return nil
 									}, k, true)
 									if err != nil {
@@ -218,11 +238,14 @@ func (h *heatmap) Listen() error {
 							}
 						case 123:
 							// Quitting
-							if !h.isKeyHeld {
-								h.isKeyHeld = true
+							if !h.isControlKeyPressed {
+								h.isControlKeyPressed = true
 								go func() {
 									err := h.processCallback(func(k key) error {
 										h.sigc <- syscall.SIGQUIT
+
+										h.setTitle(ActionQuit)
+
 										return nil
 									}, k, false)
 									if err != nil {
@@ -261,6 +284,10 @@ func (h *heatmap) Listen() error {
 	}
 }
 
+func (h *heatmap) setTitle(s string) {
+	h.mFakeTitle.SetTitle(fmt.Sprintf("Last action %s", s))
+}
+
 func (h *heatmap) processCallback(f callback, k key, shouldRefresh bool) error {
 	var err error
 	select {
@@ -280,7 +307,7 @@ func (h *heatmap) processCallback(f callback, k key, shouldRefresh bool) error {
 		break
 	}
 	h.Lock()
-	h.isKeyHeld = false
+	h.isControlKeyPressed = false
 	h.Unlock()
 
 	return err
@@ -340,6 +367,9 @@ func (h *heatmap) onReady() func() {
 		systray.SetIcon(icon.Data)
 		systray.SetTitle("Chroma heatmap")
 		systray.SetTooltip("Chroma heatmap")
+
+		h.mFakeTitle = systray.AddMenuItem("Chroma heatmap", "Chroma heatmap")
+		h.mFakeTitle.Disable()
 
 		mDiscard := systray.AddMenuItem("Discard	F9  ", "Discard current and start new")
 		mSaveAndNew := systray.AddMenuItem("Save and new	F10", "Save into all time and start new heatmap")

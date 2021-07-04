@@ -27,11 +27,12 @@ type List struct {
 //}
 
 type KeyboardGrid struct {
-	ColorMap      [1021]int64  `json:"-"`
-	MapCount      [6][22]int64 `json:"-"`
-	MaxKeyPresses int64        `json:"-"`
-	Effect        string       `json:"effect"`
-	Param         [6][22]int64 `json:"param"`
+	ColorMap        [1021]int64  `json:"-"`
+	MapCount        [6][22]int64 `json:"-"`
+	MaxKeyPresses   int64        `json:"-"`
+	TotalKeyPresses int64        `json:"-"`
+	Effect          string       `json:"effect"`
+	Param           [6][22]int64 `json:"param"`
 }
 
 func BasicGrid() *KeyboardGrid {
