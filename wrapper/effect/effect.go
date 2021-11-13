@@ -1,6 +1,5 @@
 package effect
 
-const Static = "CHROMA_STATIC"
 const Custom = "CHROMA_CUSTOM"
 const KeyboardMaxRows = 6
 const KeyboardMaxColumns = 22
@@ -13,18 +12,6 @@ type Effect struct {
 type Param struct {
 	Color int64 `json:"color"`
 }
-
-type Identifier struct {
-	Id string `json:"id"`
-}
-type List struct {
-	Ids []string `json:"ids"`
-}
-
-//type Number struct {
-//	Number int64
-//	Value  int64
-//}
 
 type KeyboardGrid struct {
 	ColorMap        [1021]int64  `json:"-"`

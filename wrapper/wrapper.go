@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -14,18 +13,20 @@ import (
 	"time"
 )
 
-const SessionFile = "session.json"
+const (
+	SessionFile    = "session.json"
+	DeviceKeyboard = "keyboard"
+)
 
 type Wrapper struct {
+	sync.Mutex
 	url                string
 	applicationContent string
-	dead               chan bool
-	session            connectionResponse
-	List               effect.List
-	Client             *http.Client
-	a                  app
 	retryConnection    bool
-	sync.Mutex
+	killChannel        chan bool
+	Client             *http.Client
+	session            connectionResponse
+	application        app
 }
 
 type author struct {
@@ -39,7 +40,6 @@ type app struct {
 	Author          author   `json:"author"`
 	DeviceSupported []string `json:"device_supported"`
 	Category        string   `json:"category"`
-	alive           chan bool
 }
 
 type connectionResponse struct {
@@ -47,28 +47,11 @@ type connectionResponse struct {
 	Uri       string `json:"uri"`
 }
 
-type SdkResponse struct {
+type sdkResponse struct {
 	Result int64  `json:"result"`
 	Id     string `json:"id"`
 }
 
-type SdkResults struct {
-	Results []SdkResponse
-}
-
-const (
-	DeviceKeyboard = "keyboard"
-)
-
-//const DeviceMouse = "mouse"
-//const DeviceHeadset = "headset"
-//const DeviceMousepad = "mousepad"
-//const DeviceKeypad = "keypad"
-//const DeviceChromalink = "chromalink"
-
-// New
-// device must be one of the constants of the package.
-// Only DeviceKeyboard supported right now.
 func New(
 	url string,
 	authorName string,
@@ -80,8 +63,8 @@ func New(
 	w := &Wrapper{
 		url:                url,
 		applicationContent: "application/json",
-		dead:               make(chan bool),
-		a: app{
+		killChannel:        make(chan bool, 1),
+		application: app{
 			Title:       title,
 			Description: description,
 			Author: author{
@@ -104,6 +87,73 @@ func New(
 	time.Sleep(2 * time.Second)
 
 	return w, nil
+}
+
+func (w *Wrapper) MakeKeyboardRequest(e interface{}) error {
+	url := fmt.Sprintf("%s/keyboard", w.session.Uri)
+
+	return w.makeRequest(e, url, http.MethodPut)
+}
+
+func (w *Wrapper) Close() {
+	err := w.makeRequest(nil, w.session.Uri, http.MethodDelete)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	w.killChannel <- true
+}
+
+func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
+	payload, err := json.Marshal(&e)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := w.Client.Do(req)
+	if err != nil || res.StatusCode != 200 {
+		err = w.tryConnection()
+		if err != nil {
+			log.Printf("Can't recoonect: %s", err.Error())
+			return err
+		}
+
+		res, err = w.Client.Do(req)
+		if err != nil {
+			return err
+
+		}
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("Error, httpcode: %d", res.StatusCode))
+	}
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+
+	var response sdkResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+
+	if response.Result != 0 {
+		return errors.New(fmt.Sprintf("Status code: %d", response.Result))
+	}
+
+	return err
 }
 
 func (w *Wrapper) tryConnection() error {
@@ -171,7 +221,7 @@ func (w *Wrapper) openConnection() error {
 		return err
 	}
 
-	payload, err := json.Marshal(w.a)
+	payload, err := json.Marshal(w.application)
 	if err != nil {
 		return err
 	}
@@ -257,91 +307,15 @@ func (w *Wrapper) pulse() error {
 func (w *Wrapper) heartbeat() {
 	for {
 		select {
-		case <-w.dead:
+		case <-w.killChannel:
 			return
 		default:
-			w.pulse()
+			err := w.pulse()
+			if err != nil {
+				log.Fatal(err)
+			}
 
 			time.Sleep(time.Second)
 		}
 	}
-}
-
-func (w *Wrapper) deleteEffects() error {
-	url := fmt.Sprintf("%s/effect", w.session.Uri)
-	return w.makeRequest(w.List, url, http.MethodDelete)
-}
-
-func (w *Wrapper) Close() {
-	w.dead <- false
-	err := w.makeRequest(nil, w.session.Uri, http.MethodDelete)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func (w *Wrapper) Static() error {
-	e := &effect.Effect{
-		Effect: effect.Static,
-		Param:  effect.Param{Color: 200},
-	}
-	return w.MakeKeyboardRequest(e)
-}
-
-func (w *Wrapper) MakeKeyboardRequest(e interface{}) error {
-	url := fmt.Sprintf("%s/keyboard", w.session.Uri)
-	return w.makeRequest(e, url, http.MethodPut)
-}
-
-func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
-	payload, err := json.Marshal(&e)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(payload))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	res, err := w.Client.Do(req)
-	if err != nil || res.StatusCode != 200 {
-		err = w.tryConnection()
-		if err != nil {
-			log.Printf("Can't recoonect: %s", err.Error())
-			return err
-		}
-
-		res, err = w.Client.Do(req)
-		if err != nil {
-			return err
-
-		}
-	}
-
-	defer res.Body.Close()
-
-	if res.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("Error, httpcode: %d", res.StatusCode))
-	}
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-
-	var response SdkResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return err
-	}
-
-	if response.Result != 0 {
-		return errors.New(fmt.Sprintf("Status code: %d", response.Result))
-	}
-
-	return err
-
 }

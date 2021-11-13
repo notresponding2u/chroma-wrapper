@@ -31,7 +31,7 @@ type key struct {
 }
 
 /**
-LOGIC:
+Color transition:
 FF0000
 FFFF00
 00FF00
@@ -44,28 +44,36 @@ type callback func(k key) error
 type heatmap struct {
 	sync.Mutex
 	isControlKeyPressed bool
-	timeoutChan         chan bool
 	grid                *effect.KeyboardGrid
-	evChan              chan hook.Event
 	wrapper             *wrapper.Wrapper
-	sigc                chan os.Signal
-	mFakeTitle          *systray.MenuItem
+	title               *systray.MenuItem
+	timeoutChan         chan bool
+	evChan              chan hook.Event
+	osChannel           chan os.Signal
 }
 
 func New(w *wrapper.Wrapper) (*heatmap, error) {
 	h := &heatmap{}
 	h.grid = effect.BasicGrid()
+
+	// Base effect
 	err := w.MakeKeyboardRequest(h.grid)
 	if err != nil {
+
 		return nil, err
 	}
+
 	h.evChan = hook.Start()
 	h.wrapper = w
+
 	go h.startTray()
+
 	return h, nil
 }
 
 func (h *heatmap) Close() {
+	h.wrapper.Close()
+
 	err := h.saveMap()
 	if err != nil {
 		log.Fatal(err)
@@ -103,18 +111,18 @@ func (h *heatmap) remap(k key) {
 
 func (h *heatmap) saveMap() error {
 	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
-		return h.save(FileAllTimeHeatMap)
+		return h.saveFile(FileAllTimeHeatMap)
 	} else {
 		err = h.loadFile(FileAllTimeHeatMap)
 		if err != nil {
 			return err
 		}
 
-		return h.save(FileAllTimeHeatMap)
+		return h.saveFile(FileAllTimeHeatMap)
 	}
 }
 
-func (h *heatmap) save(file string) error {
+func (h *heatmap) saveFile(file string) error {
 	j, err := json.Marshal(h.grid.MapCount)
 	if err != nil {
 		return err
@@ -140,19 +148,20 @@ func (h *heatmap) mergeHeatmaps(donor *effect.KeyboardGrid) {
 func (h *heatmap) Listen() error {
 	m := newMap()
 
-	h.sigc = make(chan os.Signal, 1)
-	signal.Notify(h.sigc,
+	h.osChannel = make(chan os.Signal, 1)
+	signal.Notify(h.osChannel,
 		syscall.SIGHUP,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 
-	h.timeoutChan = make(chan bool)
+	h.timeoutChan = make(chan bool, 1)
 
 	var lastEvent uint16
 	var lastEventKind uint8
 
 	defer systray.Quit()
+
 	for {
 		select {
 		case ev := <-h.evChan:
@@ -164,9 +173,7 @@ func (h *heatmap) Listen() error {
 					if ev.Kind == hook.KeyUp {
 						// Special functions have to be triggered to use isControlKeyPressed
 						if h.isControlKeyPressed {
-							go func() {
-								h.timeoutChan <- true
-							}()
+							h.timeoutChan <- true
 						}
 
 					}
@@ -176,6 +183,7 @@ func (h *heatmap) Listen() error {
 						case 122:
 							// Load all times
 							if !h.isControlKeyPressed {
+
 								h.isControlKeyPressed = true
 								go func() {
 									err := h.processCallback(func(k key) error {
@@ -186,7 +194,7 @@ func (h *heatmap) Listen() error {
 
 										h.remap(k)
 
-										h.mFakeTitle.SetTitle(ActionLoadAllTimes)
+										h.title.SetTitle(ActionLoadAllTimes)
 
 										return nil
 									}, k, true)
@@ -242,10 +250,9 @@ func (h *heatmap) Listen() error {
 								h.isControlKeyPressed = true
 								go func() {
 									err := h.processCallback(func(k key) error {
-										h.sigc <- syscall.SIGQUIT
-
 										h.setTitle(ActionQuit)
 
+										h.osChannel <- syscall.SIGQUIT
 										return nil
 									}, k, false)
 									if err != nil {
@@ -278,14 +285,14 @@ func (h *heatmap) Listen() error {
 					}
 				}
 			}
-		case <-h.sigc:
+		case <-h.osChannel:
 			return nil
 		}
 	}
 }
 
 func (h *heatmap) setTitle(s string) {
-	h.mFakeTitle.SetTitle(fmt.Sprintf("Last action	%s", s))
+	h.title.SetTitle(fmt.Sprintf("Last action	%s", s))
 }
 
 func (h *heatmap) processCallback(f callback, k key, shouldRefresh bool) error {
@@ -368,8 +375,8 @@ func (h *heatmap) onReady() func() {
 		systray.SetTitle("Chroma heatmap")
 		systray.SetTooltip("Chroma heatmap")
 
-		h.mFakeTitle = systray.AddMenuItem("Chroma heatmap", "Chroma heatmap")
-		h.mFakeTitle.Disable()
+		h.title = systray.AddMenuItem("Chroma heatmap", "Chroma heatmap")
+		h.title.Disable()
 
 		systray.AddSeparator()
 
@@ -381,7 +388,7 @@ func (h *heatmap) onReady() func() {
 		for {
 			select {
 			case <-mQuit.ClickedCh:
-				h.sigc <- syscall.SIGQUIT
+				h.osChannel <- syscall.SIGQUIT
 			case <-mMergeAndLoad.ClickedCh:
 				h.evChan <- hook.Event{
 					Kind:    hook.KeyHold,
@@ -409,7 +416,7 @@ func (h *heatmap) onExit() func() {
 			log.Fatal(err)
 		}
 
-		h.sigc <- syscall.SIGQUIT
+		h.osChannel <- syscall.SIGQUIT
 	}
 }
 

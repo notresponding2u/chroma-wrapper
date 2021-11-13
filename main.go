@@ -18,7 +18,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer w.Close()
 
 	h, err := heatmap.New(w)
 	if err != nil {
