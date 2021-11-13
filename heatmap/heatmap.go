@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/getlantern/systray"
-	"github.com/getlantern/systray/example/icon"
 	"github.com/notresponding2u/chroma-wrapper/heatmap/effect"
+	"github.com/notresponding2u/chroma-wrapper/heatmap/tray"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
 	hook "github.com/robotn/gohook"
 	"io/ioutil"
@@ -46,6 +46,7 @@ type heatmap struct {
 	isControlKeyPressed bool
 	grid                *effect.KeyboardGrid
 	wrapper             *wrapper.Wrapper
+	tray                tray.TrayApi
 	title               *systray.MenuItem
 	timeoutChan         chan bool
 	evChan              chan hook.Event
@@ -55,6 +56,8 @@ type heatmap struct {
 func New(w *wrapper.Wrapper) (*heatmap, error) {
 	h := &heatmap{}
 	h.grid = effect.BasicGrid()
+
+	h.tray = &tray.Tray{}
 
 	// Base effect
 	err := w.MakeKeyboardRequest(h.grid)
@@ -66,7 +69,7 @@ func New(w *wrapper.Wrapper) (*heatmap, error) {
 	h.evChan = hook.Start()
 	h.wrapper = w
 
-	go h.startTray()
+	go h.tray.Run(h.onReady(), h.onExit())
 
 	return h, nil
 }
@@ -88,7 +91,7 @@ func (h *heatmap) remap(k key) {
 		h.grid.MaxKeyPresses = h.grid.MapCount[k.X][k.Y]
 	}
 
-	systray.SetTooltip(fmt.Sprintf("Max count single key %d\nMax count total %d", h.grid.MaxKeyPresses, h.grid.TotalKeyPresses))
+	h.tray.SetTooltip(fmt.Sprintf("Max count single key %d\nMax count total %d", h.grid.MaxKeyPresses, h.grid.TotalKeyPresses))
 
 	for x, _ := range h.grid.Param {
 		for y, _ := range h.grid.Param[x] {
@@ -160,7 +163,7 @@ func (h *heatmap) Listen() error {
 	var lastEvent uint16
 	var lastEventKind uint8
 
-	defer systray.Quit()
+	defer h.tray.Quit()
 
 	for {
 		select {
@@ -394,25 +397,21 @@ func (h *heatmap) loadFile(file string) error {
 //	}
 //}
 
-func (h *heatmap) startTray() {
-	systray.Run(h.onReady(), h.onExit())
-}
-
 func (h *heatmap) onReady() func() {
 	return func() {
-		systray.SetIcon(icon.Data)
-		systray.SetTitle("Chroma heatmap")
-		systray.SetTooltip("Chroma heatmap")
+		h.tray.SetIcon()
+		h.tray.SetTitle("Chroma heatmap")
+		h.tray.SetTooltip("Chroma heatmap")
 
-		h.title = systray.AddMenuItem("Chroma heatmap", "Chroma heatmap")
+		h.title = h.tray.AddMenuItem("Chroma heatmap", "Chroma heatmap")
 		h.title.Disable()
 
-		systray.AddSeparator()
+		h.tray.AddSeparator()
 
-		mDiscard := systray.AddMenuItem("Discard	F9  ", "Discard current and start new")
-		mSaveAndNew := systray.AddMenuItem("Save and new	F10", "Save into all time and start new heatmap")
-		mMergeAndLoad := systray.AddMenuItem("Load all time	F11", "Load all time heatmap and merge to current")
-		mQuit := systray.AddMenuItem("Quit	F12", "Quit the whole app")
+		mDiscard := h.tray.AddMenuItem("Discard	F9  ", "Discard current and start new")
+		mSaveAndNew := h.tray.AddMenuItem("Save and new	F10", "Save into all time and start new heatmap")
+		mMergeAndLoad := h.tray.AddMenuItem("Load all time	F11", "Load all time heatmap and merge to current")
+		mQuit := h.tray.AddMenuItem("Quit	F12", "Quit the whole app")
 
 		for {
 			select {
