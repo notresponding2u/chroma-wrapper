@@ -25,40 +25,44 @@ type KeyboardGrid struct {
 func BasicGrid() *KeyboardGrid {
 	e := &KeyboardGrid{
 		Effect: Custom,
-		Param:  GetKeyboardStruct(),
+		Param:  GetBaseGrid(),
 	}
 
-	setBaseColor(e)
+	setColorMap(e)
 
 	return e
 }
 
-func GetKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
-	var grid KeyboardGrid
-	for i, _ := range grid.Param {
-		for y, _ := range grid.Param[i] {
-			grid.Param[i][y] = 0xFF0000
+func GetBaseGrid() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
+	var g [KeyboardMaxRows][KeyboardMaxColumns]int64
+	for i, _ := range g {
+		for y, _ := range g[i] {
+			g[i][y] = 0xFF0000
 		}
 	}
-	return grid.Param
+
+	return g
 }
 
-func setBaseColor(e *KeyboardGrid) {
+func setColorMap(e *KeyboardGrid) {
 	var color int64 = 0xFF0000
 	for i := 0; i < 255; i++ {
 		color += 0x000100
 		e.ColorMap[i] = color
 	}
+
 	color = 0xFFFF00
 	for i := 255; i < 510; i++ {
 		color -= 0x010000
 		e.ColorMap[i] = color
 	}
+
 	color = 0x00FF00
 	for i := 510; i < 765; i++ {
 		color += 0x000001
 		e.ColorMap[i] = color
 	}
+
 	color = 0x00FFFF
 	for i := 765; i < 1021; i++ {
 		color -= 0x000100
