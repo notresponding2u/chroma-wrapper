@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/getlantern/systray"
 	"github.com/getlantern/systray/example/icon"
+	"github.com/notresponding2u/chroma-wrapper/heatmap/effect"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
-	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 	hook "github.com/robotn/gohook"
 	"io/ioutil"
 	"log"
@@ -203,6 +203,11 @@ func (h *heatmap) Listen() error {
 									}
 								}()
 							}
+
+							err := h.defaultRemapAction(k)
+							if err != nil {
+								return err
+							}
 						case 121:
 							// Save and new
 							if !h.isControlKeyPressed {
@@ -225,6 +230,11 @@ func (h *heatmap) Listen() error {
 									}
 								}()
 							}
+
+							err := h.defaultRemapAction(k)
+							if err != nil {
+								return err
+							}
 						case 120:
 							// Discard
 							if !h.isControlKeyPressed {
@@ -244,6 +254,11 @@ func (h *heatmap) Listen() error {
 									}
 								}()
 							}
+
+							err := h.defaultRemapAction(k)
+							if err != nil {
+								return err
+							}
 						case 123:
 							// Quitting
 							if !h.isControlKeyPressed {
@@ -260,6 +275,11 @@ func (h *heatmap) Listen() error {
 									}
 								}()
 							}
+
+							err := h.defaultRemapAction(k)
+							if err != nil {
+								return err
+							}
 						case 13:
 							h.remap(key{
 								X: 3,
@@ -275,9 +295,7 @@ func (h *heatmap) Listen() error {
 								return err
 							}
 						default:
-							h.remap(k)
-
-							err := h.wrapper.MakeKeyboardRequest(&h.grid)
+							err := h.defaultRemapAction(k)
 							if err != nil {
 								return err
 							}
@@ -289,6 +307,17 @@ func (h *heatmap) Listen() error {
 			return nil
 		}
 	}
+}
+
+func (h *heatmap) defaultRemapAction(k key) error {
+	h.remap(k)
+
+	err := h.wrapper.MakeKeyboardRequest(&h.grid)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (h *heatmap) setTitle(s string) {

@@ -2,8 +2,8 @@ package heatmap
 
 import (
 	"fmt"
+	"github.com/notresponding2u/chroma-wrapper/heatmap/effect"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
-	"github.com/notresponding2u/chroma-wrapper/wrapper/effect"
 	"testing"
 )
 

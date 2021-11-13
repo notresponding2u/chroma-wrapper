@@ -28,7 +28,7 @@ func BasicGrid() *KeyboardGrid {
 		Param:  GetKeyboardStruct(),
 	}
 
-	setColorMap(e)
+	setBaseColor(e)
 
 	return e
 }
@@ -43,7 +43,7 @@ func GetKeyboardStruct() [KeyboardMaxRows][KeyboardMaxColumns]int64 {
 	return grid.Param
 }
 
-func setColorMap(e *KeyboardGrid) {
+func setBaseColor(e *KeyboardGrid) {
 	var color int64 = 0xFF0000
 	for i := 0; i < 255; i++ {
 		color += 0x000100
