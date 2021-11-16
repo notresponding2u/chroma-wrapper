@@ -74,14 +74,13 @@ func New(w *wrapper.Wrapper) (*heatmap, error) {
 	return h, nil
 }
 
-func (h *heatmap) Close() {
+func (h *heatmap) Close(fileName string) {
 	h.wrapper.Close()
 
-	err := h.saveMap()
+	err := h.saveMap(fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer hook.End()
 }
 
 func (h *heatmap) remap(k key) {
@@ -112,16 +111,16 @@ func (h *heatmap) remap(k key) {
 	}
 }
 
-func (h *heatmap) saveMap() error {
-	if _, err := os.Stat(FileAllTimeHeatMap); os.IsNotExist(err) {
-		return h.saveFile(FileAllTimeHeatMap)
+func (h *heatmap) saveMap(fileName string) error {
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return h.saveFile(fileName)
 	} else {
-		err = h.loadFile(FileAllTimeHeatMap)
+		err = h.loadFile(fileName)
 		if err != nil {
 			return err
 		}
 
-		return h.saveFile(FileAllTimeHeatMap)
+		return h.saveFile(fileName)
 	}
 }
 
@@ -217,7 +216,7 @@ func (h *heatmap) Listen() error {
 								h.isControlKeyPressed = true
 								go func() {
 									err := h.processCallback(func(k key) error {
-										err := h.saveMap()
+										err := h.saveMap(FileAllTimeHeatMap)
 										if err != nil {
 											return err
 										}
@@ -439,7 +438,7 @@ func (h *heatmap) onReady() func() {
 
 func (h *heatmap) onExit() func() {
 	return func() {
-		err := h.saveMap()
+		err := h.saveMap(FileAllTimeHeatMap)
 		if err != nil {
 			log.Fatal(err)
 		}

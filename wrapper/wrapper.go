@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	SessionFile    = "session.json"
+	SessionFile    = "Session.json"
 	DeviceKeyboard = "keyboard"
 )
 
@@ -23,9 +23,9 @@ type Wrapper struct {
 	url                string
 	applicationContent string
 	retryConnection    bool
-	killChannel        chan bool
+	KillChannel        chan bool
 	Client             *http.Client
-	session            connectionResponse
+	Session            connectionResponse
 	application        app
 }
 
@@ -47,7 +47,7 @@ type connectionResponse struct {
 	Uri       string `json:"uri"`
 }
 
-type sdkResponse struct {
+type SdkResponse struct {
 	Result int64  `json:"result"`
 	Id     string `json:"id"`
 }
@@ -63,7 +63,7 @@ func New(
 	w := &Wrapper{
 		url:                url,
 		applicationContent: "application/json",
-		killChannel:        make(chan bool, 1),
+		KillChannel:        make(chan bool, 1),
 		application: app{
 			Title:       title,
 			Description: description,
@@ -90,18 +90,18 @@ func New(
 }
 
 func (w *Wrapper) MakeKeyboardRequest(e interface{}) error {
-	url := fmt.Sprintf("%s/keyboard", w.session.Uri)
+	url := fmt.Sprintf("%s/keyboard", w.Session.Uri)
 
 	return w.makeRequest(e, url, http.MethodPut)
 }
 
 func (w *Wrapper) Close() {
-	err := w.makeRequest(nil, w.session.Uri, http.MethodDelete)
+	err := w.makeRequest(nil, w.Session.Uri, http.MethodDelete)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	w.killChannel <- true
+	w.KillChannel <- true
 }
 
 func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
@@ -143,7 +143,7 @@ func (w *Wrapper) makeRequest(e interface{}, url string, method string) error {
 		return err
 	}
 
-	var response sdkResponse
+	var response SdkResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return err
@@ -186,7 +186,7 @@ func (w *Wrapper) checkIfStarted() error {
 			return err
 		}
 
-		err = json.Unmarshal(s, &w.session)
+		err = json.Unmarshal(s, &w.Session)
 		if err != nil {
 			return err
 		}
@@ -241,12 +241,12 @@ func (w *Wrapper) openConnection() error {
 		return err
 	}
 
-	err = json.Unmarshal(body, &w.session)
+	err = json.Unmarshal(body, &w.Session)
 	if err != nil {
 		return err
 	}
 
-	err = saveSession(w.session)
+	err = saveSession(w.Session)
 	if err != nil {
 		return err
 	}
@@ -276,7 +276,7 @@ func saveSession(s connectionResponse) error {
 }
 
 func (w *Wrapper) pulse() error {
-	url := fmt.Sprintf("%s/heartbeat", w.session.Uri)
+	url := fmt.Sprintf("%s/heartbeat", w.Session.Uri)
 
 	req, err := http.NewRequest(http.MethodPut, url, nil)
 	if err != nil {
@@ -307,7 +307,7 @@ func (w *Wrapper) pulse() error {
 func (w *Wrapper) heartbeat() {
 	for {
 		select {
-		case <-w.killChannel:
+		case <-w.KillChannel:
 			return
 		default:
 			err := w.pulse()

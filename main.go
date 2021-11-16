@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/notresponding2u/chroma-wrapper/heatmap"
 	"github.com/notresponding2u/chroma-wrapper/wrapper"
+	hook "github.com/robotn/gohook"
 	"log"
 )
 
@@ -24,7 +25,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	defer h.Close()
+	defer h.Close(heatmap.FileAllTimeHeatMap)
+
+	defer hook.End()
 
 	err = h.Listen()
 	if err != nil {
